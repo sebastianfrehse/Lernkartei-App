@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Lernkartei</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1b1d1f">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#1b1d1f;
+    --surface:#24272a;
+    --surface2:#2d3134;
+    --line:#3a3f42;
+    --copper:#c9722d;
+    --copper-dim:#8a5222;
+    --red:#d6564a;
+    --yellow:#e0b23e;
+    --green:#4ea968;
+    --text:#ece9e2;
+    --muted:#989c9e;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width:440px;
+    min-height:100vh;
+    background:var(--bg);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  header{
+    padding:22px 20px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  header .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--copper);
+    letter-spacing:0.02em;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:26px;
+    margin:0;
+    font-weight:600;
+  }
+  .header-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin:4px 0 14px;
+  }
+  .header-icon-btn{
+    background:var(--surface2);
+    border:1px solid var(--line);
+    color:var(--text);
+    width:38px;height:38px;
+    border-radius:10px;
+    font-size:17px;
+    flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .group-item{
+    background:var(--surface);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    margin-bottom:10px;
+    display:flex;justify-content:space-between;align-items:center;
+    cursor:pointer;
+  }
+  .group-item-name{font-size:15px;}
+  .group-item-code{font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+  .member-row{display:flex;align-items:center;gap:10px;margin-top:8px;}
+  .member-name{flex:0 0 auto;width:92px;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .member-bar-track{flex:1;height:8px;border-radius:4px;background:var(--surface2);overflow:hidden;}
+  .member-bar-fill{height:100%;background:var(--green);}
+  .member-pct{flex:0 0 auto;width:38px;text-align:right;font-size:12.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .group-code-display{font-family:'IBM Plex Mono',monospace;letter-spacing:1px;}
+  .avatar{
+    width:48px;height:48px;
+    border-radius:50%;
+    background:var(--surface2);
+    border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;flex-shrink:0;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;font-size:18px;
+    color:var(--muted);
+  }
+  .avatar img{width:100%;height:100%;object-fit:cover;}
+  .avatar-sm{width:26px;height:26px;font-size:12px;}
+  .profile-row{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+  .profile-info{display:flex;flex-direction:column;gap:4px;}
+  .profile-name{font-size:15px;font-weight:600;}
+  .cat-row{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding-bottom:12px;
+    margin-bottom:2px;
+    -ms-overflow-style:none;
+    scrollbar-width:none;
+  }
+  .cat-row::-webkit-scrollbar{display:none;}
+  .cat-hint{font-size:11px;color:var(--muted);margin:-6px 0 10px;}
+  .cat-pill{
+    flex:0 0 auto;
+    background:var(--surface2);
+    color:var(--muted);
+    border:1px solid var(--line);
+    padding:8px 14px;
+    border-radius:14px;
+    font-size:13.5px;
+    white-space:nowrap;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:5px;
+    min-width:64px;
+  }
+  .cat-pill-label{white-space:nowrap;}
+  .cat-pill-bar{
+    display:flex;
+    width:100%;
+    height:4px;
+    border-radius:2px;
+    overflow:hidden;
+    background:rgba(255,255,255,0.1);
+  }
+  .cat-pill-seg{height:100%;}
+  .cat-pill.active{
+    background:var(--copper);
+    color:#1b1d1f;
+    border-color:var(--copper);
+    font-weight:600;
+  }
+  .cat-pill.add-pill{
+    color:var(--copper);
+    border-style:dashed;
+    border-color:var(--copper-dim);
+  }
+  .progress-row{
+    display:flex;
+    gap:8px;
+    height:8px;
+    border-radius:4px;
+    overflow:hidden;
+    background:var(--surface2);
+  }
+  .progress-seg{height:100%;}
+  .progress-labels{
+    display:flex;
+    justify-content:space-between;
+    margin-top:8px;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  main{flex:1;padding:16px 20px 100px;overflow-y:auto;}
+  .empty{
+    margin-top:60px;
+    text-align:center;
+    color:var(--muted);
+  }
+  .empty p{margin:6px 0;font-size:14.5px;}
+  .card{
+    background:var(--surface);
+    border-radius:var(--radius);
+    padding:16px 16px 14px;
+    margin-bottom:12px;
+    border-left:4px solid var(--line);
+    cursor:pointer;
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    align-items:flex-start;
+  }
+  .card.status-rot{border-left-color:var(--red);}
+  .card.status-gelb{border-left-color:var(--yellow);}
+  .card.status-gruen{border-left-color:var(--green);}
+  .card-q{font-size:15px;line-height:1.4;flex:1;}
+  .leds{display:flex;gap:5px;margin-top:10px;flex-shrink:0;padding-top:2px;}
+  .led{width:9px;height:9px;border-radius:50%;background:var(--surface2);border:1px solid var(--line);}
+  .led.on-rot{background:var(--red);border-color:var(--red);}
+  .led.on-gelb{background:var(--yellow);border-color:var(--yellow);}
+  .led.on-gruen{background:var(--green);border-color:var(--green);}
+  .fab-row{
+    position:absolute;
+    bottom:0;left:0;right:0;
+    display:flex;
+    gap:10px;
+    padding:14px 20px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top, var(--bg) 60%, transparent);
+  }
+  button{font-family:inherit;border:none;cursor:pointer;}
+  .btn-primary{
+    flex:1;
+    background:var(--copper);
+    color:#1b1d1f;
+    font-weight:600;
+    font-size:15px;
+    padding:14px;
+    border-radius:var(--radius);
+  }
+  .btn-secondary{
+    background:var(--surface2);
+    color:var(--text);
+    font-size:15px;
+    padding:14px 18px;
+    border-radius:var(--radius);
+    border:1px solid var(--line);
+  }
+  .sheet-overlay{
+    position:absolute;inset:0;
+    background:rgba(0,0,0,0.55);
+    display:none;
+    align-items:flex-end;
+    z-index:10;
+  }
+  .sheet-overlay.open{display:flex;}
+  .sheet{
+    background:var(--surface);
+    width:100%;
+    border-radius:16px 16px 0 0;
+    padding:20px 20px calc(20px + env(safe-area-inset-bottom));
+    max-height:88vh;
+    overflow-y:auto;
+  }
+  .sheet h2{font-family:'Space Grotesk',sans-serif;font-size:19px;margin:0 0 16px;}
+  label.field-label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px;margin-top:14px;}
+  textarea, input[type="text"]{
+    width:100%;
+    background:var(--surface2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text);
+    font-family:inherit;
+    font-size:15px;
+    padding:12px;
+    resize:vertical;
+  }
+  textarea{min-height:64px;}
+  textarea:focus, input[type="text"]:focus{outline:2px solid var(--copper);outline-offset:1px;}
+
+  .ocr-btn{
+    margin-top:10px;
+    width:100%;
+    background:var(--surface2);
+    border:1px dashed var(--copper-dim);
+    color:var(--copper);
+    padding:11px;
+    border-radius:8px;
+    font-size:14px;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    cursor:pointer;
+  }
+  .ocr-status{font-size:12.5px;color:var(--muted);margin-top:8px;min-height:16px;}
+
+  .option-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top:10px;
+  }
+  .opt-marker{
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+    width:30px;height:30px;
+  }
+  .opt-marker input[type="radio"]{
+    position:absolute;inset:0;
+    opacity:0;
+    margin:0;
+    cursor:pointer;
+  }
+  .opt-marker-circle{
+    width:30px;height:30px;
+    border-radius:50%;
+    border:2px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    color:var(--muted);
+    pointer-events:none;
+  }
+  .opt-marker input[type="radio"]:checked + .opt-marker-circle{
+    border-color:var(--green);
+    background:var(--green);
+    color:#1b1d1f;
+    font-weight:600;
+  }
+  .option-row input[type="text"]{margin:0;}
+  .option-hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+
+  .sheet-actions{display:flex;gap:10px;margin-top:20px;}
+  .sheet-actions .btn-secondary{flex:0 0 auto;}
+  .sheet-actions .btn-primary{flex:1;}
+  .danger-link{
+    display:block;text-align:center;margin-top:16px;color:var(--red);
+    background:none;font-size:13.5px;
+  }
+  .form-error{color:var(--red);font-size:12.5px;margin-top:10px;min-height:16px;}
+  .form-warning{color:var(--yellow);font-size:12.5px;margin-top:6px;line-height:1.5;}
+
+  select{
+    width:100%;
+    background:var(--surface2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text);
+    font-family:inherit;
+    font-size:15px;
+    padding:12px;
+  }
+  select:focus{outline:2px solid var(--copper);outline-offset:1px;}
+
+  /* Lerngruppen */
+  #groupScreen{
+    position:absolute;inset:0;
+    background:var(--bg);
+    display:none;
+    flex-direction:column;
+    z-index:15;
+  }
+  #groupScreen.open{display:flex;}
+
+  /* Lern-Modus */
+  #learn{
+    position:absolute;inset:0;
+    background:var(--bg);
+    display:none;
+    flex-direction:column;
+    z-index:5;
+  }
+  #learn.open{display:flex;}
+  .learn-top{
+    padding:18px 20px 10px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .learn-close{color:var(--muted);font-size:14px;background:none;}
+  .learn-count{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--muted);}
+  .learn-body{
+    flex:1;display:flex;flex-direction:column;
+    padding:10px 20px 24px;
+    overflow-y:auto;
+  }
+  .learn-card{
+    width:100%;
+    background:var(--surface);
+    border-radius:14px;
+    padding:24px 20px;
+    min-height:100px;
+    display:flex;align-items:center;justify-content:center;
+    text-align:center;
+    margin-bottom:16px;
+  }
+  .learn-q{font-size:17px;line-height:1.5;font-weight:500;}
+  .learn-options{display:flex;flex-direction:column;gap:10px;}
+  .learn-option{
+    text-align:left;
+    background:var(--surface);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:14px 16px;
+    border-radius:10px;
+    font-size:15px;
+    line-height:1.4;
+  }
+  .learn-option.correct{background:rgba(78,169,104,0.18);border-color:var(--green);}
+  .learn-option.wrong{background:rgba(214,86,74,0.18);border-color:var(--red);}
+  .learn-continue{
+    margin-top:16px;
+    background:var(--copper);
+    color:#1b1d1f;
+    font-weight:600;
+    padding:14px;
+    border-radius:var(--radius);
+    font-size:15px;
+  }
+  .learn-done{padding:40px 4px 0;color:var(--muted);font-size:14.5px;line-height:1.6;text-align:center;}
+  .learn-done-actions{display:flex;flex-direction:column;gap:10px;margin-top:24px;padding:0 4px;}
+
+  /* Zuschneiden vor der Texterkennung */
+  #cropScreen{
+    position:absolute;inset:0;
+    background:var(--bg);
+    display:none;
+    flex-direction:column;
+    z-index:20;
+  }
+  #cropScreen.open{display:flex;}
+  .crop-body{flex:1;padding:6px 20px 14px;overflow-y:auto;}
+  .crop-hint{font-size:13.5px;color:var(--muted);margin:0 0 14px;line-height:1.5;}
+  .zoom-controls{
+    display:flex;align-items:center;gap:12px;
+    margin-bottom:10px;
+  }
+  .zoom-btn{
+    background:var(--surface2);
+    border:1px solid var(--line);
+    color:var(--text);
+    width:36px;height:36px;
+    border-radius:8px;
+    font-size:18px;
+    line-height:1;
+    flex-shrink:0;
+  }
+  .zoom-label{font-size:12.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;min-width:42px;text-align:center;}
+  #cropImgWrap{
+    position:relative;
+    width:100%;
+    height:52vh;
+    touch-action:none;
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:auto;
+    background:#000;
+  }
+  #cropInner{
+    position:relative;
+    display:inline-block;
+  }
+  #cropImg{display:block;user-select:none;-webkit-user-drag:none;pointer-events:none;}
+  #cropBox{
+    position:absolute;
+    border:2px solid var(--copper);
+    background:rgba(201,114,45,0.18);
+    display:none;
+  }
+  .crop-actions{
+    display:flex;gap:10px;
+    padding:14px 20px calc(14px + env(safe-area-inset-bottom));
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="header-top">
+      <h1>Lernkartei</h1>
+      <button class="header-icon-btn" id="groupsBtn">👥</button>
+    </div>
+    <div class="cat-row" id="catRow"></div>
+    <div class="cat-hint">Rubrik gedrückt halten zum Umbenennen/Löschen</div>
+    <div class="progress-row" id="progressRow"></div>
+    <div class="progress-labels">
+      <span id="progLabel">0 Karten</span>
+      <span id="progGruen">0 sicher</span>
+    </div>
+  </header>
+
+  <main id="cardList"></main>
+
+  <div class="fab-row">
+    <button class="btn-secondary" id="learnBtn">Lernen</button>
+    <button class="btn-primary" id="addBtn">+ Neue Karte</button>
+  </div>
+
+  <!-- Add/Edit Sheet -->
+  <div class="sheet-overlay" id="sheetOverlay">
+    <div class="sheet">
+      <h2 id="sheetTitle">Neue Karte</h2>
+
+      <label class="field-label">Rubrik</label>
+      <select id="categorySelect"></select>
+      <input type="text" id="newCategoryInput" placeholder="Name der neuen Rubrik" style="display:none;margin-top:8px;">
+
+      <label class="field-label">Frage</label>
+      <textarea id="qInput" placeholder="z.B. Wie berechnet man den Widerstand nach dem Ohmschen Gesetz?"></textarea>
+      <div class="form-warning" id="duplicateWarning"></div>
+
+      <label class="ocr-btn" for="cameraInput">📷 Frage & Antworten aus Foto einlesen</label>
+      <input type="file" accept="image/*" capture="environment" id="cameraInput" style="position:absolute;width:1px;height:1px;opacity:0;">
+      <label class="ocr-btn" for="galleryInput" style="margin-top:8px;">🖼️ Bild aus Galerie wählen</label>
+      <input type="file" accept="image/*" id="galleryInput" style="position:absolute;width:1px;height:1px;opacity:0;">
+      <div class="ocr-status" id="ocrStatus"></div>
+      <label class="field-label" id="rawTextLabel" style="display:none;">Erkannter Text komplett (zur Kontrolle, hier kannst du Textteile kopieren)</label>
+      <textarea id="rawOcrText" rows="4" style="display:none;"></textarea>
+
+      <label class="field-label">Antwortmöglichkeiten</label>
+      <div class="option-hint">Markiere mit dem Punkt links, welche Antwort richtig ist.</div>
+      <div id="optionsList"></div>
+
+      <div class="form-error" id="formError"></div>
+
+      <div class="sheet-actions">
+        <button class="btn-secondary" id="cancelBtn">Abbrechen</button>
+        <button class="btn-primary" id="saveBtn">Speichern</button>
+      </div>
+      <button class="danger-link" id="deleteBtn" style="display:none;">Karte löschen</button>
+    </div>
+  </div>
+
+  <!-- Rubrik anlegen/bearbeiten -->
+  <div class="sheet-overlay" id="categoryOverlay">
+    <div class="sheet">
+      <h2 id="categoryOverlayTitle">Neue Rubrik</h2>
+      <label class="field-label">Name</label>
+      <input type="text" id="categoryNameInput" placeholder="z.B. WiSo, Teil A, Teil B">
+      <div class="form-error" id="categoryError"></div>
+      <div class="sheet-actions">
+        <button class="btn-secondary" id="categoryCancelBtn">Abbrechen</button>
+        <button class="btn-primary" id="categorySaveBtn">Anlegen</button>
+      </div>
+      <button class="danger-link" id="categoryDeleteBtn" style="display:none;">Rubrik löschen</button>
+    </div>
+  </div>
+
+  <!-- Lerngruppen -->
+  <div id="groupScreen">
+    <div class="learn-top">
+      <button class="learn-close" id="groupClose">✕ Schließen</button>
+      <span class="learn-count">Lerngruppen</span>
+    </div>
+    <div class="learn-body" id="groupBody"></div>
+  </div>
+
+  <!-- Lern-Modus -->
+  <div id="learn">
+    <div class="learn-top">
+      <button class="learn-close" id="learnClose">✕ Schließen</button>
+      <span class="learn-count" id="learnCount"></span>
+    </div>
+    <div class="learn-body" id="learnBody"></div>
+  </div>
+
+  <!-- Zuschneiden vor der Texterkennung -->
+  <div id="cropScreen">
+    <div class="learn-top">
+      <button class="learn-close" id="cropCancel">✕ Abbrechen</button>
+      <span class="learn-count">Frage markieren</span>
+    </div>
+    <div class="crop-body">
+      <p class="crop-hint">Mit <b>einem Finger</b> ziehst du das Rechteck um Frage + 5 Antworten. Mit <b>zwei Fingern</b> verschiebst du das gezoomte Bild.</p>
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomOut" type="button">−</button>
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button class="zoom-btn" id="zoomIn" type="button">+</button>
+      </div>
+      <div id="cropImgWrap">
+        <div id="cropInner">
+          <img id="cropImg" alt="Foto">
+          <div id="cropBox"></div>
+        </div>
+      </div>
+    </div>
+    <div class="crop-actions">
+      <button class="btn-secondary" id="cropReset">Neu markieren</button>
+      <button class="btn-primary" id="cropConfirm" disabled>Ausschnitt einlesen</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const NUM_OPTIONS = 5;
+
+// --- Firebase (für die geteilten Lerngruppen-Daten) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCvczIH9xKsT4Guo308F0UNdQBWqEbYXVc",
+  authDomain: "lernkartei-app-de128.firebaseapp.com",
+  projectId: "lernkartei-app-de128",
+  storageBucket: "lernkartei-app-de128.firebasestorage.app",
+  messagingSenderId: "841321376714",
+  appId: "1:841321376714:web:ad274755086267fcea7d33",
+  measurementId: "G-SCV7VC0X2R"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+async function saveGroupMeta(code, meta){
+  try{
+    await db.collection('groups').doc(code).set(meta);
+    return true;
+  }catch(e){
+    console.error('Gruppe konnte nicht erstellt werden', e);
+    return false;
+  }
+}
+async function getGroupMeta(code){
+  try{
+    const doc = await db.collection('groups').doc(code).get();
+    return doc.exists ? doc.data() : null;
+  }catch(e){
+    console.error('Gruppe konnte nicht geladen werden', e);
+    return null;
+  }
+}
+async function saveMemberProgress(code, memberKey, data){
+  try{
+    await db.collection('groups').doc(code).collection('members').doc(memberKey).set(data);
+  }catch(e){
+    console.error('Fortschritt konnte nicht veröffentlicht werden', e);
+  }
+}
+async function getGroupMembers(code){
+  try{
+    const snap = await db.collection('groups').doc(code).collection('members').get();
+    return snap.docs.map(d => d.data());
+  }catch(e){
+    console.error('Mitglieder konnten nicht geladen werden', e);
+    return [];
+  }
+}
+
+// --- Geräteeigene Speicherung (ersetzt die Claude-spezifische window.storage) ---
+// localStorage funktioniert in jeder normalen Android-WebView, auch nach dem
+// Verpacken als eigenständige App, ganz ohne Zusatz-Plugin.
+function localGet(key){
+  try{ return localStorage.getItem(key); }catch(e){ return null; }
+}
+function localSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }catch(e){ console.error('Speichern fehlgeschlagen', e); return false; }
+}
+
+let cards = [];
+let categories = [];
+let selectedCategoryId = null; // null = "Alle"
+let editingId = null;
+let duplicateConfirmed = false;
+let displayName = '';
+let myGroups = []; // [{code, name}]
+let currentGroupCode = null;
+let profilePicture = ''; // data URL
+
+async function loadProfile(){
+  displayName = localGet('displayName') || '';
+  try{
+    const val = localGet('myGroups');
+    myGroups = val ? JSON.parse(val) : [];
+  }catch(e){
+    myGroups = [];
+  }
+  profilePicture = localGet('profilePicture') || '';
+}
+async function saveDisplayName(){
+  localSet('displayName', displayName);
+}
+async function saveProfilePicture(){
+  localSet('profilePicture', profilePicture);
+}
+async function saveMyGroups(){
+  localSet('myGroups', JSON.stringify(myGroups));
+}
+let learnQueue = [];
+let learnIndex = 0;
+let answered = false;
+
+const STORAGE_KEY = 'cards';
+const CATEGORY_KEY = 'categories';
+
+async function loadCards(){
+  try{
+    const val = localGet(STORAGE_KEY);
+    cards = val ? JSON.parse(val) : [];
+  }catch(e){
+    cards = [];
+  }
+  try{
+    const val = localGet(CATEGORY_KEY);
+    categories = val ? JSON.parse(val) : [];
+  }catch(e){
+    categories = [];
+  }
+
+  // Falls es noch keine Rubrik gibt (z.B. beim allerersten Start), eine Standard-Rubrik anlegen
+  if(categories.length === 0){
+    categories.push({ id: 'cat-' + Date.now().toString(36), name: 'Allgemein' });
+    await saveCategories();
+  }
+  // Karten ohne Rubrik (z.B. aus einer älteren Version) der ersten Rubrik zuordnen
+  let needsMigration = false;
+  cards.forEach(c => {
+    if(!c.categoryId){ c.categoryId = categories[0].id; needsMigration = true; }
+  });
+  if(needsMigration) await saveCards();
+
+  render();
+}
+
+async function saveCards(){
+  localSet(STORAGE_KEY, JSON.stringify(cards));
+}
+
+async function saveCategories(){
+  localSet(CATEGORY_KEY, JSON.stringify(categories));
+}
+
+function statusOf(card){
+  if(card.streak >= 3) return 'gruen';
+  if(card.streak >= 1) return 'gelb';
+  return 'rot';
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function countsFor(catId){
+  const list = catId === null ? cards : cards.filter(c => c.categoryId === catId);
+  const total = list.length;
+  const gruen = list.filter(c=>statusOf(c)==='gruen').length;
+  const gelb = list.filter(c=>statusOf(c)==='gelb').length;
+  const rot = list.filter(c=>statusOf(c)==='rot').length;
+  return { total, gruen, gelb, rot };
+}
+
+function fillPillContent(pill, name, counts){
+  pill.innerHTML = '';
+  const label = document.createElement('span');
+  label.className = 'cat-pill-label';
+  label.textContent = name + (counts.total > 0 && counts.gruen === counts.total ? ' ✓' : '');
+  pill.appendChild(label);
+
+  if(counts.total > 0){
+    const bar = document.createElement('span');
+    bar.className = 'cat-pill-bar';
+    [['gruen',counts.gruen],['gelb',counts.gelb],['rot',counts.rot]].forEach(([key,count])=>{
+      if(count>0){
+        const seg = document.createElement('span');
+        seg.className = 'cat-pill-seg';
+        seg.style.width = (count/counts.total*100)+'%';
+        seg.style.background = key==='gruen'?'var(--green)':key==='gelb'?'var(--yellow)':'var(--red)';
+        bar.appendChild(seg);
+      }
+    });
+    pill.appendChild(bar);
+  }
+}
+
+function renderCategoryRow(){
+  const row = document.getElementById('catRow');
+  row.innerHTML = '';
+
+  const allPill = document.createElement('button');
+  allPill.className = 'cat-pill' + (selectedCategoryId === null ? ' active' : '');
+  fillPillContent(allPill, 'Alle', countsFor(null));
+  allPill.addEventListener('click', () => { selectedCategoryId = null; render(); });
+  row.appendChild(allPill);
+
+  categories.forEach(cat => {
+    const pill = document.createElement('button');
+    pill.className = 'cat-pill' + (selectedCategoryId === cat.id ? ' active' : '');
+    fillPillContent(pill, cat.name, countsFor(cat.id));
+
+    let pressTimer = null;
+    let longPressTriggered = false;
+    pill.addEventListener('pointerdown', () => {
+      longPressTriggered = false;
+      pressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        openCategoryOverlay(cat.id);
+      }, 500);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(evt => {
+      pill.addEventListener(evt, () => {
+        if(pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+      });
+    });
+    pill.addEventListener('click', () => {
+      if(longPressTriggered) return;
+      selectedCategoryId = cat.id;
+      render();
+    });
+
+    row.appendChild(pill);
+  });
+
+  const addPill = document.createElement('button');
+  addPill.className = 'cat-pill add-pill';
+  addPill.innerHTML = '<span class="cat-pill-label">+ Rubrik</span>';
+  addPill.addEventListener('click', () => openCategoryOverlay());
+  row.appendChild(addPill);
+}
+
+function render(){
+  renderCategoryRow();
+
+  const list = document.getElementById('cardList');
+  const visibleCards = selectedCategoryId === null
+    ? cards
+    : cards.filter(c => c.categoryId === selectedCategoryId);
+
+  const total = visibleCards.length;
+  const gruen = visibleCards.filter(c=>statusOf(c)==='gruen').length;
+  const gelb = visibleCards.filter(c=>statusOf(c)==='gelb').length;
+  const rot = visibleCards.filter(c=>statusOf(c)==='rot').length;
+
+  const progressRow = document.getElementById('progressRow');
+  progressRow.innerHTML = '';
+  if(total>0){
+    [['gruen',gruen],['gelb',gelb],['rot',rot]].forEach(([key,count])=>{
+      if(count>0){
+        const seg = document.createElement('div');
+        seg.className = 'progress-seg';
+        seg.style.width = (count/total*100)+'%';
+        seg.style.background = key==='gruen'?'var(--green)':key==='gelb'?'var(--yellow)':'var(--red)';
+        progressRow.appendChild(seg);
+      }
+    });
+  }
+  document.getElementById('progLabel').textContent = total + (total===1?' Karte':' Karten');
+  document.getElementById('progGruen').textContent = gruen + ' sicher';
+
+  if(total===0){
+    list.innerHTML = '<div class="empty"><p>Noch keine Karten in dieser Rubrik.</p><p>Leg deine erste Karte an — per Hand oder per Foto.</p></div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  visibleCards.slice().reverse().forEach(card=>{
+    const status = statusOf(card);
+    const el = document.createElement('div');
+    el.className = 'card status-' + status;
+    el.innerHTML = `
+      <div class="card-q">${escapeHtml(card.question)}</div>
+      <div class="leds">
+        ${[0,1,2].map(i => `<div class="led ${i < card.streak ? 'on-'+status : ''}"></div>`).join('')}
+      </div>
+    `;
+    el.addEventListener('click', ()=>openEdit(card.id));
+    list.appendChild(el);
+  });
+}
+
+// --- Rubrik anlegen/bearbeiten (von der Startseite) ---
+let editingCategoryId = null;
+let categoryDeleteConfirmed = false;
+
+function openCategoryOverlay(catId){
+  editingCategoryId = catId || null;
+  categoryDeleteConfirmed = false;
+  const cat = editingCategoryId ? categories.find(c => c.id === editingCategoryId) : null;
+  document.getElementById('categoryOverlayTitle').textContent = cat ? 'Rubrik bearbeiten' : 'Neue Rubrik';
+  document.getElementById('categorySaveBtn').textContent = cat ? 'Speichern' : 'Anlegen';
+  document.getElementById('categoryNameInput').value = cat ? cat.name : '';
+  document.getElementById('categoryError').textContent = '';
+  document.getElementById('categoryDeleteBtn').style.display = cat ? 'block' : 'none';
+  document.getElementById('categoryOverlay').classList.add('open');
+}
+function closeCategoryOverlay(){
+  document.getElementById('categoryOverlay').classList.remove('open');
+}
+async function saveCategoryForm(){
+  const name = document.getElementById('categoryNameInput').value.trim();
+  if(!name){
+    document.getElementById('categoryError').textContent = 'Bitte einen Namen eingeben.';
+    return;
+  }
+  if(editingCategoryId){
+    const cat = categories.find(c => c.id === editingCategoryId);
+    if(cat) cat.name = name;
+    await saveCategories();
+  }else{
+    const cat = { id: 'cat-' + Date.now().toString(36), name };
+    categories.push(cat);
+    await saveCategories();
+    selectedCategoryId = cat.id;
+  }
+  closeCategoryOverlay();
+  render();
+}
+async function deleteCategoryForm(){
+  if(!editingCategoryId) return;
+  const count = cards.filter(c => c.categoryId === editingCategoryId).length;
+  if(!categoryDeleteConfirmed){
+    categoryDeleteConfirmed = true;
+    document.getElementById('categoryError').textContent = count > 0
+      ? `Löscht auch ${count} Karte(n) in dieser Rubrik. Nochmal auf "Rubrik löschen" tippen zum Bestätigen.`
+      : 'Nochmal auf "Rubrik löschen" tippen zum Bestätigen.';
+    return;
+  }
+  categories = categories.filter(c => c.id !== editingCategoryId);
+  cards = cards.filter(c => c.categoryId !== editingCategoryId);
+  await saveCategories();
+  await saveCards();
+  if(selectedCategoryId === editingCategoryId) selectedCategoryId = null;
+  closeCategoryOverlay();
+  render();
+}
+document.getElementById('categoryCancelBtn').addEventListener('click', closeCategoryOverlay);
+document.getElementById('categorySaveBtn').addEventListener('click', saveCategoryForm);
+document.getElementById('categoryDeleteBtn').addEventListener('click', deleteCategoryForm);
+
+// --- Add/Edit Sheet ---
+function populateCategorySelect(selectedId){
+  const sel = document.getElementById('categorySelect');
+  sel.innerHTML = '';
+  categories.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat.id;
+    opt.textContent = cat.name;
+    sel.appendChild(opt);
+  });
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__';
+  newOpt.textContent = '+ Neue Rubrik…';
+  sel.appendChild(newOpt);
+
+  sel.value = selectedId && categories.some(c=>c.id===selectedId) ? selectedId : (categories[0] ? categories[0].id : '__new__');
+  document.getElementById('newCategoryInput').style.display = 'none';
+  document.getElementById('newCategoryInput').value = '';
+}
+document.getElementById('categorySelect').addEventListener('change', (e)=>{
+  document.getElementById('newCategoryInput').style.display = e.target.value === '__new__' ? 'block' : 'none';
+});
+
+function renderOptionRows(options, correctIndex){
+  const wrap = document.getElementById('optionsList');
+  wrap.innerHTML = '';
+  for(let i=0;i<NUM_OPTIONS;i++){
+    const row = document.createElement('div');
+    row.className = 'option-row';
+    row.innerHTML = `
+      <label class="opt-marker">
+        <input type="radio" name="correctOption" value="${i}" id="correctOpt${i}" ${correctIndex===i?'checked':''}>
+        <span class="opt-marker-circle">${i+1}</span>
+      </label>
+      <input type="text" id="optionInput${i}" placeholder="Antwort ${i+1}" value="${options[i] ? escapeHtml(options[i]) : ''}">
+    `;
+    wrap.appendChild(row);
+  }
+}
+
+function resetRawText(){
+  document.getElementById('rawOcrText').value = '';
+  document.getElementById('rawOcrText').style.display = 'none';
+  document.getElementById('rawTextLabel').style.display = 'none';
+}
+
+function openAdd(){
+  editingId = null;
+  duplicateConfirmed = false;
+  document.getElementById('sheetTitle').textContent = 'Neue Karte';
+  document.getElementById('qInput').value = '';
+  document.getElementById('ocrStatus').textContent = '';
+  document.getElementById('formError').textContent = '';
+  document.getElementById('duplicateWarning').textContent = '';
+  document.getElementById('deleteBtn').style.display = 'none';
+  resetRawText();
+  populateCategorySelect(selectedCategoryId);
+  renderOptionRows(['', '', '', '', ''], null);
+  document.getElementById('sheetOverlay').classList.add('open');
+}
+
+function openEdit(id){
+  const card = cards.find(c=>c.id===id);
+  if(!card) return;
+  editingId = id;
+  duplicateConfirmed = false;
+  document.getElementById('sheetTitle').textContent = 'Karte bearbeiten';
+  document.getElementById('qInput').value = card.question;
+  document.getElementById('ocrStatus').textContent = '';
+  document.getElementById('formError').textContent = '';
+  document.getElementById('duplicateWarning').textContent = '';
+  document.getElementById('deleteBtn').style.display = 'block';
+  resetRawText();
+  populateCategorySelect(card.categoryId);
+  renderOptionRows(card.options, card.correctIndex);
+  document.getElementById('sheetOverlay').classList.add('open');
+}
+
+document.getElementById('qInput').addEventListener('input', ()=>{
+  duplicateConfirmed = false;
+  document.getElementById('duplicateWarning').textContent = '';
+});
+
+function closeSheet(){
+  document.getElementById('sheetOverlay').classList.remove('open');
+}
+
+async function saveSheet(){
+  const q = document.getElementById('qInput').value.trim();
+  const options = [];
+  for(let i=0;i<NUM_OPTIONS;i++){
+    options.push(document.getElementById('optionInput'+i).value.trim());
+  }
+  const checked = document.querySelector('input[name="correctOption"]:checked');
+  const errorEl = document.getElementById('formError');
+  const catSelectValue = document.getElementById('categorySelect').value;
+  const newCatName = document.getElementById('newCategoryInput').value.trim();
+
+  if(!q){
+    errorEl.textContent = 'Bitte eine Frage eingeben.';
+    return;
+  }
+  if(options.some(o => !o)){
+    errorEl.textContent = 'Bitte alle 5 Antwortmöglichkeiten ausfüllen.';
+    return;
+  }
+  if(!checked){
+    errorEl.textContent = 'Bitte markieren, welche Antwort richtig ist.';
+    return;
+  }
+  if(catSelectValue === '__new__' && !newCatName){
+    errorEl.textContent = 'Bitte einen Namen für die neue Rubrik eingeben.';
+    return;
+  }
+  errorEl.textContent = '';
+
+  const normalizedQ = q.replace(/\s+/g, ' ').trim().toLowerCase();
+  const duplicate = cards.find(c => c.id !== editingId && c.question.replace(/\s+/g, ' ').trim().toLowerCase() === normalizedQ);
+  const warningEl = document.getElementById('duplicateWarning');
+  if(duplicate && !duplicateConfirmed){
+    const dupCat = categories.find(cat => cat.id === duplicate.categoryId);
+    warningEl.textContent = 'Diese Frage gibt es schon' + (dupCat ? ' in der Rubrik "' + dupCat.name + '"' : '') + ' — nochmal auf "Speichern" tippen, um sie trotzdem anzulegen.';
+    duplicateConfirmed = true;
+    return;
+  }
+  warningEl.textContent = '';
+
+  const correctIndex = parseInt(checked.value, 10);
+
+  let categoryId = catSelectValue;
+  if(catSelectValue === '__new__'){
+    const cat = { id: 'cat-' + Date.now().toString(36), name: newCatName };
+    categories.push(cat);
+    await saveCategories();
+    categoryId = cat.id;
+    selectedCategoryId = cat.id;
+  }
+
+  if(editingId){
+    const card = cards.find(c=>c.id===editingId);
+    card.question = q;
+    card.options = options;
+    card.correctIndex = correctIndex;
+    card.categoryId = categoryId;
+  }else{
+    cards.push({id: Date.now().toString(36), question:q, options, correctIndex, streak:0, categoryId});
+  }
+  await saveCards();
+  closeSheet();
+  render();
+}
+
+async function deleteCard(){
+  if(!editingId) return;
+  cards = cards.filter(c=>c.id!==editingId);
+  await saveCards();
+  closeSheet();
+  render();
+}
+
+// --- OCR ---
+function parseOcrText(text){
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  if(lines.length <= NUM_OPTIONS){
+    // Zu wenige Zeilen erkannt, um sicher zwischen Frage und 5 Antworten zu trennen
+    return { question: lines.join(' '), options: [] };
+  }
+
+  // Die letzten 5 nicht-leeren Zeilen sind die Antworten (jede Antwort steht auf eigener Zeile),
+  // alles davor ist die Frage.
+  const answerLines = lines.slice(-NUM_OPTIONS);
+  const questionLines = lines.slice(0, lines.length - NUM_OPTIONS);
+
+  // Schneidet am Zeilenanfang nur ein einzelnes, kurzes Zeichen als Nummer-Überbleibsel ab
+  // (Ziffer, Buchstabe oder ein von der OCR verunstaltetes Symbol der eingekreisten Zahl),
+  // optional in Klammern, gefolgt von einem Leerzeichen. Mehrstellige Zahlen wie "230 Volt"
+  // bleiben unangetastet, weil dort nach dem ersten Zeichen kein Leerzeichen kommt.
+  const markerPrefix = /^[\(\[]?[^\sA-Za-zÄÖÜäöüß][\)\].:]?\s+/;
+  const options = answerLines.map(line => line.replace(markerPrefix, '').trim());
+
+  return { question: questionLines.join(' '), options };
+}
+
+// Lädt ein Foto sauber ausgerichtet (EXIF-Drehung korrigiert) und in Originalfarbe,
+// als Grundlage für die Zuschneide-Auswahl.
+function loadOrientedCanvas(file, maxDim){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if(width > maxDim || height > maxDim){
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Bild konnte nicht geladen werden'));
+    };
+    img.src = url;
+  });
+}
+
+// --- Zuschneiden ---
+let sourceCanvas = null;
+let cropPointerStart = null;
+let cropRectDisplay = null;
+let zoomLevel = 1;
+let baseWidthPx = 0;
+
+function applyZoom(){
+  const width = Math.round(baseWidthPx * zoomLevel);
+  document.getElementById('cropImg').style.width = width + 'px';
+  document.getElementById('zoomLabel').textContent = Math.round(zoomLevel * 100) + '%';
+  // Markierung zurücksetzen, weil sich die Pixel-Zuordnung durch den Zoom ändert
+  cropRectDisplay = null;
+  document.getElementById('cropBox').style.display = 'none';
+  document.getElementById('cropConfirm').disabled = true;
+}
+
+function openCropScreen(canvas){
+  sourceCanvas = canvas;
+  const imgEl = document.getElementById('cropImg');
+  imgEl.src = canvas.toDataURL('image/jpeg', 0.9);
+  document.getElementById('cropBox').style.display = 'none';
+  document.getElementById('cropConfirm').disabled = true;
+  cropRectDisplay = null;
+
+  // Erst sichtbar machen, DANN die Breite messen — sonst ist der Container noch
+  // "display:none" und liefert eine Breite von 0 (führt zum schwarzen Bildschirm).
+  document.getElementById('cropScreen').classList.add('open');
+
+  const wrap = document.getElementById('cropImgWrap');
+  baseWidthPx = wrap.clientWidth;
+  zoomLevel = 1;
+  applyZoom();
+  wrap.scrollTop = 0;
+  wrap.scrollLeft = 0;
+}
+
+function closeCropScreen(){
+  document.getElementById('cropScreen').classList.remove('open');
+  sourceCanvas = null;
+}
+
+document.getElementById('zoomIn').addEventListener('click', ()=>{
+  zoomLevel = Math.min(4, zoomLevel + 0.5);
+  applyZoom();
+});
+document.getElementById('zoomOut').addEventListener('click', ()=>{
+  zoomLevel = Math.max(1, zoomLevel - 0.5);
+  applyZoom();
+});
+
+const cropInner = document.getElementById('cropInner');
+const activePointers = new Map(); // pointerId -> {x, y}
+let panLastMid = null;
+
+function pointersMidpoint(){
+  const pts = [...activePointers.values()];
+  if(pts.length === 0) return null;
+  return {
+    x: pts.reduce((s,p)=>s+p.x,0) / pts.length,
+    y: pts.reduce((s,p)=>s+p.y,0) / pts.length
+  };
+}
+
+cropInner.addEventListener('pointerdown', (e)=>{
+  cropInner.setPointerCapture(e.pointerId);
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if(activePointers.size === 1){
+    // Ein Finger: mögliche neue Markierung beginnt
+    const rect = cropInner.getBoundingClientRect();
+    cropPointerStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }else{
+    // Zweiter Finger kommt dazu: Markierung abbrechen, ab jetzt wird verschoben
+    cropPointerStart = null;
+    cropRectDisplay = null;
+    document.getElementById('cropBox').style.display = 'none';
+    document.getElementById('cropConfirm').disabled = true;
+    panLastMid = pointersMidpoint();
+  }
+});
+
+cropInner.addEventListener('pointermove', (e)=>{
+  if(!activePointers.has(e.pointerId)) return;
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if(activePointers.size >= 2){
+    // Zwei Finger: Bild verschieben
+    const mid = pointersMidpoint();
+    if(panLastMid){
+      const wrap = document.getElementById('cropImgWrap');
+      wrap.scrollLeft -= (mid.x - panLastMid.x);
+      wrap.scrollTop -= (mid.y - panLastMid.y);
+    }
+    panLastMid = mid;
+    return;
+  }
+
+  if(!cropPointerStart) return;
+  const rect = cropInner.getBoundingClientRect();
+  const curX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+  const curY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+  const x = Math.min(cropPointerStart.x, curX);
+  const y = Math.min(cropPointerStart.y, curY);
+  const w = Math.abs(curX - cropPointerStart.x);
+  const h = Math.abs(curY - cropPointerStart.y);
+  const box = document.getElementById('cropBox');
+  box.style.left = x + 'px';
+  box.style.top = y + 'px';
+  box.style.width = w + 'px';
+  box.style.height = h + 'px';
+  box.style.display = 'block';
+  cropRectDisplay = { x, y, w, h };
+});
+
+function endCropPointer(e){
+  activePointers.delete(e.pointerId);
+  if(activePointers.size < 2) panLastMid = null;
+  if(activePointers.size === 0){
+    cropPointerStart = null;
+    document.getElementById('cropConfirm').disabled = !(cropRectDisplay && cropRectDisplay.w > 20 && cropRectDisplay.h > 20);
+  }
+}
+cropInner.addEventListener('pointerup', endCropPointer);
+cropInner.addEventListener('pointercancel', endCropPointer);
+
+document.getElementById('cropReset').addEventListener('click', ()=>{
+  cropRectDisplay = null;
+  document.getElementById('cropBox').style.display = 'none';
+  document.getElementById('cropConfirm').disabled = true;
+});
+document.getElementById('cropCancel').addEventListener('click', closeCropScreen);
+
+document.getElementById('cropConfirm').addEventListener('click', async ()=>{
+  const imgEl = document.getElementById('cropImg');
+  const scaleX = sourceCanvas.width / imgEl.clientWidth;
+  const scaleY = sourceCanvas.height / imgEl.clientHeight;
+  const sx = cropRectDisplay.x * scaleX;
+  const sy = cropRectDisplay.y * scaleY;
+  const sw = cropRectDisplay.w * scaleX;
+  const sh = cropRectDisplay.h * scaleY;
+
+  const cropped = document.createElement('canvas');
+  cropped.width = sw;
+  cropped.height = sh;
+  const ctx = cropped.getContext('2d');
+  ctx.filter = 'grayscale(1) contrast(1.15)';
+  ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  closeCropScreen();
+  await runOcrOnCanvas(cropped);
+});
+
+// --- Texterkennung auf dem gewählten Ausschnitt ---
+async function runOcrOnCanvas(canvas){
+  const statusEl = document.getElementById('ocrStatus');
+  statusEl.textContent = 'Text wird erkannt …';
+  try{
+    const worker = await Tesseract.createWorker('deu', 1, {
+      logger: m => {
+        if(m.status === 'recognizing text'){
+          statusEl.textContent = 'Text wird erkannt … ' + Math.round(m.progress*100) + '%';
+        }
+      }
+    });
+    const result = await worker.recognize(canvas);
+    await worker.terminate();
+    const fullText = result.data.text.trim();
+    const { question, options } = parseOcrText(fullText);
+
+    document.getElementById('rawOcrText').value = fullText;
+    document.getElementById('rawOcrText').style.display = 'block';
+    document.getElementById('rawTextLabel').style.display = 'block';
+
+    const qInput = document.getElementById('qInput');
+    qInput.value = qInput.value ? qInput.value + '\n' + question : question;
+
+    let filled = 0;
+    for(let i=0;i<NUM_OPTIONS;i++){
+      const optInput = document.getElementById('optionInput'+i);
+      if(!optInput.value && options[filled]){
+        optInput.value = options[filled];
+        filled++;
+      }
+    }
+
+    statusEl.textContent = 'Automatischer Vorschlag oben eingetragen — wenn der danebenliegt, findest du unten den kompletten erkannten Text zum Nachlesen/Kopieren.';
+  }catch(err){
+    console.error('OCR-Fehler:', err);
+    statusEl.textContent = 'Texterkennung fehlgeschlagen (' + (err && err.message ? err.message : 'unbekannter Fehler') + '). Bitte nochmal versuchen oder von Hand eintippen.';
+  }
+}
+
+async function handleFileSelected(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('ocrStatus');
+  statusEl.textContent = 'Foto wird vorbereitet …';
+  try{
+    const canvas = await loadOrientedCanvas(file, 2200);
+    statusEl.textContent = '';
+    openCropScreen(canvas);
+  }catch(err){
+    statusEl.textContent = 'Bild konnte nicht geladen werden.';
+  }
+  e.target.value = '';
+}
+document.getElementById('cameraInput').addEventListener('change', handleFileSelected);
+document.getElementById('galleryInput').addEventListener('change', handleFileSelected);
+
+// --- Lern-Modus ---
+function startLearning(){
+  const pool = selectedCategoryId === null
+    ? cards
+    : cards.filter(c => c.categoryId === selectedCategoryId);
+  // Rote (noch nie/kaum richtig beantwortete) Karten zuerst, gelbe danach
+  const statusRank = { rot: 0, gelb: 1 };
+  learnQueue = pool
+    .filter(c => statusOf(c) !== 'gruen')
+    .sort((a, b) => statusRank[statusOf(a)] - statusRank[statusOf(b)]);
+  learnIndex = 0;
+  answered = false;
+  document.getElementById('learn').classList.add('open');
+  renderLearnCard();
+}
+
+function shuffledOptions(card){
+  const order = card.options.map((text,i)=>({text,i}));
+  for(let i=order.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [order[i],order[j]]=[order[j],order[i]];
+  }
+  return order;
+}
+
+function renderLearnCard(){
+  const body = document.getElementById('learnBody');
+  const countEl = document.getElementById('learnCount');
+
+  if(learnQueue.length === 0){
+    countEl.textContent = '';
+    body.innerHTML = `
+      <div class="learn-done">Aktuell gibt es keine Karten zum Üben — entweder sind alle grün, oder du hast noch keine angelegt.</div>
+      <div class="learn-done-actions">
+        <button class="btn-primary" id="learnDoneClose">Zurück zu den Rubriken</button>
+      </div>
+    `;
+    document.getElementById('learnDoneClose').addEventListener('click', closeLearning);
+    return;
+  }
+  if(learnIndex >= learnQueue.length){
+    countEl.textContent = '';
+    body.innerHTML = `
+      <div class="learn-done">Runde geschafft.</div>
+      <div class="learn-done-actions">
+        <button class="btn-primary" id="learnDoneClose">Zurück zu den Rubriken</button>
+        <button class="btn-secondary" id="learnDoneRestart">Diese Rubrik nochmal</button>
+      </div>
+    `;
+    document.getElementById('learnDoneClose').addEventListener('click', closeLearning);
+    document.getElementById('learnDoneRestart').addEventListener('click', startLearning);
+    return;
+  }
+
+  const card = learnQueue[learnIndex];
+  countEl.textContent = (learnIndex+1) + ' / ' + learnQueue.length;
+  answered = false;
+  const order = shuffledOptions(card);
+
+  body.innerHTML = `
+    <div class="learn-card"><div class="learn-q">${escapeHtml(card.question)}</div></div>
+    <div class="learn-options" id="learnOptions">
+      ${order.map(opt => `<button class="learn-option" data-index="${opt.i}">${escapeHtml(opt.text)}</button>`).join('')}
+    </div>
+  `;
+
+  document.querySelectorAll('.learn-option').forEach(btn=>{
+    btn.addEventListener('click', ()=> selectOption(card, parseInt(btn.dataset.index,10)));
+  });
+}
+
+async function selectOption(card, chosenIndex){
+  if(answered) return;
+  answered = true;
+  const correct = chosenIndex === card.correctIndex;
+
+  document.querySelectorAll('.learn-option').forEach(btn=>{
+    const idx = parseInt(btn.dataset.index,10);
+    if(idx === card.correctIndex) btn.classList.add('correct');
+    else if(idx === chosenIndex) btn.classList.add('wrong');
+  });
+
+  const original = cards.find(c=>c.id===card.id);
+  original.streak = correct ? Math.min(3, original.streak + 1) : 0;
+  await saveCards();
+  render();
+
+  if(!correct){
+    // Falsch beantwortet: Karte bald nochmal in dieser Runde einstreuen statt bis zum nächsten Durchgang zu warten
+    const reinsertAt = Math.min(learnQueue.length, learnIndex + 4);
+    learnQueue.splice(reinsertAt, 0, card);
+  }
+
+  const body = document.getElementById('learnBody');
+  const btn = document.createElement('button');
+  btn.className = 'learn-continue';
+  btn.textContent = 'Weiter';
+  btn.addEventListener('click', ()=>{
+    learnIndex++;
+    renderLearnCard();
+  });
+  body.appendChild(btn);
+}
+
+function closeLearning(){
+  document.getElementById('learn').classList.remove('open');
+  render();
+}
+
+// --- Lerngruppen ---
+function generateGroupCode(){
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // ohne 0/O/1/I zur besseren Lesbarkeit
+  let code = '';
+  for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+function sanitizeKeyPart(s){
+  return (s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40) || 'user';
+}
+
+function avatarInnerHtml(name, photo){
+  if(photo) return `<img src="${photo}" alt="">`;
+  const initial = (name || '?').trim().charAt(0).toUpperCase();
+  return `<span>${escapeHtml(initial)}</span>`;
+}
+
+// Schneidet das gewählte Bild mittig quadratisch zu und verkleinert es auf eine kleine
+// Vorschaugröße, damit es sich klein genug für die Gruppen-Speicherung hält.
+function fileToAvatarDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const size = 160;
+      const minSide = Math.min(img.width, img.height);
+      const sx = (img.width - minSide) / 2;
+      const sy = (img.height - minSide) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      canvas.getContext('2d').drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Bild konnte nicht geladen werden'));
+    };
+    img.src = url;
+  });
+}
+
+function openGroupScreen(){
+  currentGroupCode = null;
+  document.getElementById('groupScreen').classList.add('open');
+  renderGroupHome();
+}
+function closeGroupScreen(){
+  document.getElementById('groupScreen').classList.remove('open');
+}
+
+function renderGroupHome(){
+  if(!displayName){
+    renderProfileForm();
+    return;
+  }
+
+  const body = document.getElementById('groupBody');
+  let html = `
+    <div class="profile-row">
+      <div class="avatar">${avatarInnerHtml(displayName, profilePicture)}</div>
+      <div class="profile-info">
+        <div class="profile-name">${escapeHtml(displayName)}</div>
+        <button class="danger-link" id="editProfileBtn" style="display:inline;margin:0;padding:0;">Profil bearbeiten</button>
+      </div>
+    </div>
+  `;
+
+  if(myGroups.length === 0){
+    html += '<div class="empty" style="margin-top:10px;"><p>Noch in keiner Lerngruppe.</p></div>';
+  }else{
+    html += '<div id="groupListWrap"></div>';
+  }
+
+  html += `
+    <div class="sheet-actions" style="margin-top:20px;">
+      <button class="btn-secondary" id="joinGroupBtn">Gruppe beitreten</button>
+      <button class="btn-primary" id="createGroupBtn">Neue Gruppe</button>
+    </div>
+  `;
+
+  body.innerHTML = html;
+
+  document.getElementById('editProfileBtn').addEventListener('click', renderProfileForm);
+  document.getElementById('joinGroupBtn').addEventListener('click', renderJoinGroupForm);
+  document.getElementById('createGroupBtn').addEventListener('click', renderCreateGroupForm);
+
+  if(myGroups.length > 0){
+    const wrap = document.getElementById('groupListWrap');
+    myGroups.forEach(g => {
+      const item = document.createElement('div');
+      item.className = 'group-item';
+      item.innerHTML = `
+        <div>
+          <div class="group-item-name">${escapeHtml(g.name || g.code)}</div>
+          <div class="group-item-code">Code: ${escapeHtml(g.code)}</div>
+        </div>
+        <span style="color:var(--copper);">›</span>
+      `;
+      item.addEventListener('click', () => openGroupDetail(g.code));
+      wrap.appendChild(item);
+    });
+  }
+}
+
+// Dient sowohl der Ersteinrichtung (noch kein Name gesetzt) als auch dem späteren Bearbeiten
+function renderProfileForm(){
+  const body = document.getElementById('groupBody');
+  const isFirstSetup = !displayName;
+  body.innerHTML = `
+    <p class="crop-hint">Name und Bild sehen die anderen Mitglieder in deinen Lerngruppen.</p>
+    <div class="profile-row">
+      <div class="avatar" id="avatarPreview">${avatarInnerHtml(displayName, profilePicture)}</div>
+      <label class="ocr-btn" for="avatarInput" style="margin:0;">Bild wählen</label>
+      <input type="file" accept="image/*" id="avatarInput" style="position:absolute;width:1px;height:1px;opacity:0;">
+    </div>
+    <label class="field-label">Dein Name</label>
+    <input type="text" id="displayNameInput" placeholder="z.B. Alex" value="${escapeHtml(displayName)}">
+    <div class="form-error" id="profileFormError"></div>
+    <div class="sheet-actions" style="margin-top:16px;">
+      ${isFirstSetup ? '' : '<button class="btn-secondary" id="profileBackBtn">Zurück</button>'}
+      <button class="btn-primary" id="saveProfileBtn">${isFirstSetup ? 'Weiter' : 'Speichern'}</button>
+    </div>
+  `;
+
+  if(!isFirstSetup){
+    document.getElementById('profileBackBtn').addEventListener('click', renderGroupHome);
+  }
+
+  document.getElementById('avatarInput').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    try{
+      profilePicture = await fileToAvatarDataUrl(file);
+      document.getElementById('avatarPreview').innerHTML = avatarInnerHtml(displayName, profilePicture);
+    }catch(err){
+      document.getElementById('profileFormError').textContent = 'Bild konnte nicht geladen werden.';
+    }
+    e.target.value = '';
+  });
+
+  document.getElementById('saveProfileBtn').addEventListener('click', async ()=>{
+    const val = document.getElementById('displayNameInput').value.trim();
+    if(!val){
+      document.getElementById('profileFormError').textContent = 'Bitte einen Namen eingeben.';
+      return;
+    }
+    displayName = val;
+    await saveDisplayName();
+    await saveProfilePicture();
+    renderGroupHome();
+  });
+}
+
+function renderCreateGroupForm(){
+  const body = document.getElementById('groupBody');
+  body.innerHTML = `
+    <label class="field-label">Name der Gruppe</label>
+    <input type="text" id="newGroupNameInput" placeholder="z.B. Lehrgang Elektro 2026">
+    <div class="form-error" id="groupFormError"></div>
+    <div class="sheet-actions" style="margin-top:16px;">
+      <button class="btn-secondary" id="groupBackBtn">Zurück</button>
+      <button class="btn-primary" id="groupCreateConfirmBtn">Erstellen</button>
+    </div>
+  `;
+  document.getElementById('groupBackBtn').addEventListener('click', renderGroupHome);
+  document.getElementById('groupCreateConfirmBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('newGroupNameInput').value.trim();
+    if(!name){
+      document.getElementById('groupFormError').textContent = 'Bitte einen Namen eingeben.';
+      return;
+    }
+    const code = generateGroupCode();
+    const ok = await saveGroupMeta(code, { name, createdAt: Date.now() });
+    if(!ok){
+      document.getElementById('groupFormError').textContent = 'Gruppe konnte nicht erstellt werden. Bitte nochmal versuchen.';
+      return;
+    }
+    myGroups.push({ code, name });
+    await saveMyGroups();
+    await openGroupDetail(code);
+  });
+}
+
+function renderJoinGroupForm(){
+  const body = document.getElementById('groupBody');
+  body.innerHTML = `
+    <label class="field-label">Beitritts-Code</label>
+    <input type="text" id="joinCodeInput" placeholder="z.B. AB3K9P" style="text-transform:uppercase;">
+    <div class="form-error" id="groupFormError"></div>
+    <div class="sheet-actions" style="margin-top:16px;">
+      <button class="btn-secondary" id="groupBackBtn">Zurück</button>
+      <button class="btn-primary" id="groupJoinConfirmBtn">Beitreten</button>
+    </div>
+  `;
+  document.getElementById('groupBackBtn').addEventListener('click', renderGroupHome);
+  document.getElementById('groupJoinConfirmBtn').addEventListener('click', async ()=>{
+    const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+    const errorEl = document.getElementById('groupFormError');
+    if(!code) return;
+    const meta = await getGroupMeta(code);
+    if(!meta){
+      errorEl.textContent = 'Diesen Code gibt es nicht. Bitte prüfen.';
+      return;
+    }
+    if(!myGroups.some(g => g.code === code)){
+      myGroups.push({ code, name: meta.name });
+      await saveMyGroups();
+    }
+    await openGroupDetail(code);
+  });
+}
+
+async function computeMyCategoryStats(){
+  return categories
+    .map(cat => {
+      const list = cards.filter(c => c.categoryId === cat.id);
+      const total = list.length;
+      const gruen = list.filter(c => statusOf(c) === 'gruen').length;
+      return { name: cat.name, total, gruen };
+    })
+    .filter(c => c.total > 0);
+}
+
+async function publishMyProgress(code){
+  if(!displayName) return;
+  const stats = await computeMyCategoryStats();
+  const memberKey = sanitizeKeyPart(displayName);
+  await saveMemberProgress(code, memberKey, { displayName, photo: profilePicture || '', updatedAt: Date.now(), categories: stats });
+}
+
+function percentFor(member, catName){
+  const c = (member.categories || []).find(c => c.name.toLowerCase() === catName.toLowerCase());
+  if(!c || c.total === 0) return 0;
+  return Math.round(c.gruen / c.total * 100);
+}
+
+async function openGroupDetail(code){
+  currentGroupCode = code;
+  const body = document.getElementById('groupBody');
+  body.innerHTML = '<p class="crop-hint">Lade Fortschritt …</p>';
+
+  await publishMyProgress(code);
+
+  const meta = await getGroupMeta(code);
+  const members = await getGroupMembers(code);
+
+  const catNames = [];
+  members.forEach(m => (m.categories || []).forEach(c => {
+    if(!catNames.some(n => n.toLowerCase() === c.name.toLowerCase())) catNames.push(c.name);
+  }));
+
+  let html = `
+    <p class="crop-hint">
+      Gruppe <b>${escapeHtml(meta ? meta.name : code)}</b><br>
+      Beitritts-Code zum Teilen: <span class="group-code-display">${escapeHtml(code)}</span>
+    </p>
+  `;
+
+  if(catNames.length === 0){
+    html += '<div class="empty"><p>Noch keine Fortschritte in dieser Gruppe — legt Karten in euren Rubriken an und schaut hier nochmal vorbei.</p></div>';
+  }else{
+    catNames.forEach(catName => {
+      html += `<label class="field-label" style="margin-top:18px;">${escapeHtml(catName)}</label>`;
+      members
+        .filter(m => (m.categories || []).some(c => c.name.toLowerCase() === catName.toLowerCase()))
+        .sort((a, b) => percentFor(b, catName) - percentFor(a, catName))
+        .forEach(m => {
+          const pct = percentFor(m, catName);
+          const isMe = displayName && m.displayName.toLowerCase() === displayName.toLowerCase();
+          html += `
+            <div class="member-row">
+              <div class="avatar avatar-sm">${avatarInnerHtml(m.displayName, m.photo)}</div>
+              <span class="member-name">${escapeHtml(m.displayName)}${isMe ? ' (du)' : ''}</span>
+              <div class="member-bar-track"><div class="member-bar-fill" style="width:${pct}%;"></div></div>
+              <span class="member-pct">${pct}%</span>
+            </div>
+          `;
+        });
+    });
+  }
+
+  html += `
+    <div class="sheet-actions" style="margin-top:24px;">
+      <button class="btn-secondary" id="groupBackBtn">Zurück</button>
+      <button class="danger-link" id="leaveGroupBtn" style="flex:0 0 auto;">Gruppe verlassen</button>
+    </div>
+  `;
+
+  body.innerHTML = html;
+  document.getElementById('groupBackBtn').addEventListener('click', renderGroupHome);
+  document.getElementById('leaveGroupBtn').addEventListener('click', async ()=>{
+    myGroups = myGroups.filter(g => g.code !== code);
+    await saveMyGroups();
+    renderGroupHome();
+  });
+}
+
+document.getElementById('groupsBtn').addEventListener('click', openGroupScreen);
+document.getElementById('groupClose').addEventListener('click', closeGroupScreen);
+
+// --- Events ---
+document.getElementById('addBtn').addEventListener('click', openAdd);
+document.getElementById('cancelBtn').addEventListener('click', closeSheet);
+document.getElementById('saveBtn').addEventListener('click', saveSheet);
+document.getElementById('deleteBtn').addEventListener('click', deleteCard);
+document.getElementById('learnBtn').addEventListener('click', startLearning);
+document.getElementById('learnClose').addEventListener('click', closeLearning);
+
+loadCards();
+loadProfile();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
