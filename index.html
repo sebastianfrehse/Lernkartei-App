@@ -1066,23 +1066,73 @@ async function deleteCard(){
 
 // --- OCR ---
 function parseOcrText(text){
+  const markerPrefix = /^[\(\[]?[^\sA-Za-zÄÖÜäöüß][\)\].:]?\s+/;
+
+  // --- Hauptversuch: nach Leerzeilen (Absätzen) trennen. Die Texterkennung setzt automatisch
+  // eine Leerzeile, wenn im Bild ein größerer Abstand zwischen Textblöcken ist — genau wie
+  // zwischen den Antworten auf dem Arbeitsblatt. Funktioniert unabhängig davon, ob die
+  // eingekreiste Zahl überhaupt richtig gelesen wird, und auch bei mehrzeiligen Antworten.
+  const blocks = text.split(/\n\s*\n+/).map(b => b.replace(/\s+/g, ' ').trim()).filter(b => b.length > 0);
+  if(blocks.length > NUM_OPTIONS){
+    const answerBlocks = blocks.slice(-NUM_OPTIONS);
+    const questionBlocks = blocks.slice(0, blocks.length - NUM_OPTIONS);
+    const options = answerBlocks.map(b => b.replace(markerPrefix, '').trim());
+    return { question: questionBlocks.join(' '), options };
+  }
+
+  // --- 2. Versuch: nach den Markierungen 1-5 im Fließtext suchen (falls keine klaren
+  // Leerzeilen erkannt wurden) ---
+  const flat = text.replace(/\s+/g, ' ').trim();
+  const tokens = [...flat.matchAll(/\S+/g)].map(m => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
+
+  function markerDigit(tok){
+    if(tok.length > 4) return null;
+    const m = tok.match(/[1-5]/);
+    if(!m) return null;
+    const letters = tok.replace(/[^A-Za-zÄÖÜäöüß]/g, '');
+    if(letters.length > 1) return null; // echte Wörter mit Ziffer drin ausschließen
+    return parseInt(m[0], 10) - 1;
+  }
+
+  const accepted = [];
+  let expected = 0;
+  for(let k = 0; k < tokens.length; k++){
+    if(markerDigit(tokens[k].text) === expected){
+      accepted.push({ ...tokens[k], tokenIndex: k });
+      expected++;
+      if(expected >= NUM_OPTIONS) break;
+    }
+  }
+
+  if(accepted.length === NUM_OPTIONS){
+    const question = flat.slice(0, accepted[0].start).trim();
+    const options = [];
+    for(let i = 0; i < accepted.length; i++){
+      const contentStart = accepted[i].end;
+      let contentEnd;
+      if(i + 1 < accepted.length){
+        contentEnd = accepted[i + 1].start;
+      }else{
+        let cutoffIndex = null;
+        for(let j = accepted[i].tokenIndex + 1; j < tokens.length; j++){
+          if(markerDigit(tokens[j].text) !== null){ cutoffIndex = j; break; }
+        }
+        contentEnd = cutoffIndex !== null ? tokens[cutoffIndex].start : flat.length;
+      }
+      options.push(flat.slice(contentStart, contentEnd).trim());
+    }
+    return { question, options };
+  }
+
+  // --- Letzter Rückfall: letzte 5 nicht-leere Zeilen (nur zuverlässig, wenn jede Antwort genau 1 Zeile ist) ---
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
   if(lines.length <= NUM_OPTIONS){
-    // Zu wenige Zeilen erkannt, um sicher zwischen Frage und 5 Antworten zu trennen
     return { question: lines.join(' '), options: [] };
   }
 
-  // Die letzten 5 nicht-leeren Zeilen sind die Antworten (jede Antwort steht auf eigener Zeile),
-  // alles davor ist die Frage.
   const answerLines = lines.slice(-NUM_OPTIONS);
   const questionLines = lines.slice(0, lines.length - NUM_OPTIONS);
-
-  // Schneidet am Zeilenanfang nur ein einzelnes, kurzes Zeichen als Nummer-Überbleibsel ab
-  // (Ziffer, Buchstabe oder ein von der OCR verunstaltetes Symbol der eingekreisten Zahl),
-  // optional in Klammern, gefolgt von einem Leerzeichen. Mehrstellige Zahlen wie "230 Volt"
-  // bleiben unangetastet, weil dort nach dem ersten Zeichen kein Leerzeichen kommt.
-  const markerPrefix = /^[\(\[]?[^\sA-Za-zÄÖÜäöüß][\)\].:]?\s+/;
   const options = answerLines.map(line => line.replace(markerPrefix, '').trim());
 
   return { question: questionLines.join(' '), options };
