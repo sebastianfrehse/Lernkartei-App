@@ -1095,7 +1095,23 @@ async function deleteCard(){
 
 // --- OCR ---
 function parseOcrText(text){
-  const markerPrefix = /^[\(\[]?[^\sA-Za-zÄÖÜäöüß][\)\].:]?\s+/;
+  // Entfernt am Anfang jedes sehr kurze "Wort" (1 Zeichen lang, egal ob Zahl, Buchstabe
+  // oder Symbol — also auch Fehlerkennungen wie aus einer "1" gewordenes "G"), bis ein
+  // echtes Wort kommt. Mehrstellige Zahlen wie "230" in echten Antworten bleiben stehen.
+  function stripMarkerJunk(str){
+    let s = str.trim();
+    for(let i = 0; i < 3; i++){
+      const m = s.match(/^(\S+)(\s+|$)/);
+      if(!m) break;
+      const core = m[1].replace(/[).:,;\]]+$/, '').replace(/^[(\[]+/, '');
+      if(core.length <= 1){
+        s = s.slice(m[0].length).trim();
+      }else{
+        break;
+      }
+    }
+    return s;
+  }
 
   // Teilt einen Textabschnitt in Antwortblöcke: bevorzugt an Leerzeilen (größerer Abstand
   // im Bild), sonst an einfachen Zeilenumbrüchen.
@@ -1104,7 +1120,7 @@ function parseOcrText(text){
     if(parts.length < NUM_OPTIONS){
       parts = rest.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     }
-    return parts.map(p => p.replace(markerPrefix, '').trim());
+    return parts.map(p => stripMarkerJunk(p));
   }
 
   // --- Hauptversuch: am ersten Fragezeichen trennen. Alles davor (inkl. "?") ist die Frage,
@@ -1127,7 +1143,7 @@ function parseOcrText(text){
   if(blocks.length > NUM_OPTIONS){
     const answerBlocks = blocks.slice(-NUM_OPTIONS);
     const questionBlocks = blocks.slice(0, blocks.length - NUM_OPTIONS);
-    const options = answerBlocks.map(b => b.replace(markerPrefix, '').trim());
+    const options = answerBlocks.map(b => stripMarkerJunk(b));
     return { question: questionBlocks.join(' '), options };
   }
 
@@ -1183,7 +1199,7 @@ function parseOcrText(text){
 
   const answerLines = lines.slice(-NUM_OPTIONS);
   const questionLines = lines.slice(0, lines.length - NUM_OPTIONS);
-  const options = answerLines.map(line => line.replace(markerPrefix, '').trim());
+  const options = answerLines.map(line => stripMarkerJunk(line));
 
   return { question: questionLines.join(' '), options };
 }
