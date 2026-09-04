@@ -623,6 +623,35 @@ async function getGroupMembers(code){
   }
 }
 
+// --- Geteilte Rubriken in Gruppen ---
+async function shareCategoryToGroup(code, payload){
+  try{
+    await db.collection('groups').doc(code).collection('shared').add(payload);
+    return true;
+  }catch(e){
+    console.error('Rubrik konnte nicht geteilt werden', e);
+    return false;
+  }
+}
+async function getSharedCategories(code){
+  try{
+    const snap = await db.collection('groups').doc(code).collection('shared').get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }catch(e){
+    console.error('Geteilte Rubriken konnten nicht geladen werden', e);
+    return [];
+  }
+}
+async function deleteSharedCategory(code, shareId){
+  try{
+    await db.collection('groups').doc(code).collection('shared').doc(shareId).delete();
+    return true;
+  }catch(e){
+    console.error('Geteilte Rubrik konnte nicht gelöscht werden', e);
+    return false;
+  }
+}
+
 // --- Geräteeigene Speicherung (ersetzt die Claude-spezifische window.storage) ---
 // localStorage funktioniert in jeder normalen Android-WebView, auch nach dem
 // Verpacken als eigenständige App, ganz ohne Zusatz-Plugin.
@@ -1068,10 +1097,32 @@ async function deleteCard(){
 function parseOcrText(text){
   const markerPrefix = /^[\(\[]?[^\sA-Za-zÄÖÜäöüß][\)\].:]?\s+/;
 
-  // --- Hauptversuch: nach Leerzeilen (Absätzen) trennen. Die Texterkennung setzt automatisch
-  // eine Leerzeile, wenn im Bild ein größerer Abstand zwischen Textblöcken ist — genau wie
-  // zwischen den Antworten auf dem Arbeitsblatt. Funktioniert unabhängig davon, ob die
-  // eingekreiste Zahl überhaupt richtig gelesen wird, und auch bei mehrzeiligen Antworten.
+  // Teilt einen Textabschnitt in Antwortblöcke: bevorzugt an Leerzeilen (größerer Abstand
+  // im Bild), sonst an einfachen Zeilenumbrüchen.
+  function splitIntoOptions(rest){
+    let parts = rest.split(/\n\s*\n+/).map(b => b.replace(/\s+/g, ' ').trim()).filter(b => b.length > 0);
+    if(parts.length < NUM_OPTIONS){
+      parts = rest.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    }
+    return parts.map(p => p.replace(markerPrefix, '').trim());
+  }
+
+  // --- Hauptversuch: am ersten Fragezeichen trennen. Alles davor (inkl. "?") ist die Frage,
+  // alles danach sind die Antworten. ---
+  const qMark = text.indexOf('?');
+  if(qMark !== -1){
+    const question = text.slice(0, qMark + 1).replace(/\s+/g, ' ').trim();
+    const rest = text.slice(qMark + 1);
+    const parts = splitIntoOptions(rest);
+    if(parts.length >= NUM_OPTIONS){
+      return { question, options: parts.slice(0, NUM_OPTIONS) };
+    }
+    if(parts.length > 0){
+      return { question, options: parts };
+    }
+  }
+
+  // --- 2. Versuch: nach Leerzeilen (Absätzen) trennen, ohne Fragezeichen als Anker ---
   const blocks = text.split(/\n\s*\n+/).map(b => b.replace(/\s+/g, ' ').trim()).filter(b => b.length > 0);
   if(blocks.length > NUM_OPTIONS){
     const answerBlocks = blocks.slice(-NUM_OPTIONS);
@@ -1080,8 +1131,7 @@ function parseOcrText(text){
     return { question: questionBlocks.join(' '), options };
   }
 
-  // --- 2. Versuch: nach den Markierungen 1-5 im Fließtext suchen (falls keine klaren
-  // Leerzeilen erkannt wurden) ---
+  // --- 3. Versuch: nach den Markierungen 1-5 im Fließtext suchen ---
   const flat = text.replace(/\s+/g, ' ').trim();
   const tokens = [...flat.matchAll(/\S+/g)].map(m => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
 
@@ -1299,6 +1349,45 @@ document.getElementById('cropReset').addEventListener('click', ()=>{
 });
 document.getElementById('cropCancel').addEventListener('click', closeCropScreen);
 
+// Wandelt ein Bild in reines Schwarz-Weiß um, mit einer automatisch berechneten optimalen
+// Schwelle (Otsu-Verfahren) statt eines festen Werts — das verbessert die Texterkennung bei
+// gedrucktem Text auf hellem Papier meist deutlich stärker als nur Kontrast/Graustufen.
+function binarizeCanvas(canvas){
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imgData.data;
+  const pixelCount = canvas.width * canvas.height;
+  const gray = new Uint8ClampedArray(pixelCount);
+  const hist = new Array(256).fill(0);
+
+  for(let i = 0, p = 0; i < data.length; i += 4, p++){
+    const g = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    gray[p] = g;
+    hist[g]++;
+  }
+
+  let sum = 0;
+  for(let t = 0; t < 256; t++) sum += t * hist[t];
+  let sumB = 0, wB = 0, varMax = 0, threshold = 127;
+  for(let t = 0; t < 256; t++){
+    wB += hist[t];
+    if(wB === 0) continue;
+    const wF = pixelCount - wB;
+    if(wF === 0) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const varBetween = wB * wF * (mB - mF) * (mB - mF);
+    if(varBetween > varMax){ varMax = varBetween; threshold = t; }
+  }
+
+  for(let i = 0, p = 0; i < data.length; i += 4, p++){
+    const v = gray[p] > threshold ? 255 : 0;
+    data[i] = v; data[i + 1] = v; data[i + 2] = v;
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
 document.getElementById('cropConfirm').addEventListener('click', async ()=>{
   const imgEl = document.getElementById('cropImg');
   const scaleX = sourceCanvas.width / imgEl.clientWidth;
@@ -1308,12 +1397,26 @@ document.getElementById('cropConfirm').addEventListener('click', async ()=>{
   const sw = cropRectDisplay.w * scaleX;
   const sh = cropRectDisplay.h * scaleY;
 
-  const cropped = document.createElement('canvas');
+  let cropped = document.createElement('canvas');
   cropped.width = sw;
   cropped.height = sh;
-  const ctx = cropped.getContext('2d');
-  ctx.filter = 'grayscale(1) contrast(1.15)';
-  ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  cropped.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  // Kleine Ausschnitte hochskalieren — hilft der Texterkennung bei kleinen Ziffern/Buchstaben
+  const MIN_WIDTH = 1400;
+  if(cropped.width < MIN_WIDTH){
+    const scale = MIN_WIDTH / cropped.width;
+    const upscaled = document.createElement('canvas');
+    upscaled.width = Math.round(cropped.width * scale);
+    upscaled.height = Math.round(cropped.height * scale);
+    const uctx = upscaled.getContext('2d');
+    uctx.imageSmoothingEnabled = true;
+    uctx.imageSmoothingQuality = 'high';
+    uctx.drawImage(cropped, 0, 0, upscaled.width, upscaled.height);
+    cropped = upscaled;
+  }
+
+  binarizeCanvas(cropped);
 
   closeCropScreen();
   await runOcrOnCanvas(cropped);
@@ -1732,6 +1835,7 @@ async function openGroupDetail(code){
 
   const meta = await getGroupMeta(code);
   const members = await getGroupMembers(code);
+  const shared = await getSharedCategories(code);
 
   const catNames = [];
   members.forEach(m => (m.categories || []).forEach(c => {
@@ -1768,7 +1872,34 @@ async function openGroupDetail(code){
     });
   }
 
+  // --- Geteilte Rubriken ---
+  html += `<label class="field-label" style="margin-top:26px;">Geteilte Rubriken</label>`;
+  if(shared.length === 0){
+    html += '<div class="option-hint">Noch nichts geteilt. Mit dem Button unten kannst du eine deiner Rubriken samt Karten in die Gruppe schicken.</div>';
+  }else{
+    shared.forEach(s => {
+      const count = (s.cards || []).length;
+      const isMine = displayName && s.sharedBy && s.sharedBy.toLowerCase() === displayName.toLowerCase();
+      html += `
+        <div class="group-item">
+          <div>
+            <div class="group-item-name">${escapeHtml(s.name)}</div>
+            <div class="group-item-code">${count} Karte(n) · von ${escapeHtml(s.sharedBy || 'unbekannt')}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+            <button class="btn-secondary" style="padding:8px 12px;font-size:13px;" data-import="${s.id}">Hinzufügen</button>
+            ${isMine ? `<button class="danger-link" style="margin:0;padding:0 4px;font-size:12px;" data-unshare="${s.id}">Entfernen</button>` : ''}
+          </div>
+        </div>
+      `;
+    });
+  }
+
   html += `
+    <div class="sheet-actions" style="margin-top:16px;">
+      <button class="btn-primary" id="shareCategoryBtn">Rubrik in Gruppe teilen</button>
+    </div>
+    <div class="form-error" id="shareStatus" style="color:var(--muted);"></div>
     <div class="sheet-actions" style="margin-top:24px;">
       <button class="btn-secondary" id="groupBackBtn">Zurück</button>
       <button class="danger-link" id="leaveGroupBtn" style="flex:0 0 auto;">Gruppe verlassen</button>
@@ -1782,6 +1913,122 @@ async function openGroupDetail(code){
     await saveMyGroups();
     renderGroupHome();
   });
+  document.getElementById('shareCategoryBtn').addEventListener('click', () => renderShareCategoryForm(code));
+
+  document.querySelectorAll('[data-import]').forEach(btn => {
+    btn.addEventListener('click', () => importSharedCategory(code, shared.find(s => s.id === btn.dataset.import)));
+  });
+  document.querySelectorAll('[data-unshare]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await deleteSharedCategory(code, btn.dataset.unshare);
+      await openGroupDetail(code);
+    });
+  });
+}
+
+// Auswahl, welche eigene Rubrik in die Gruppe geschickt werden soll
+function renderShareCategoryForm(code){
+  const body = document.getElementById('groupBody');
+  const own = categories.map(cat => ({
+    cat,
+    count: cards.filter(c => c.categoryId === cat.id).length
+  })).filter(c => c.count > 0);
+
+  if(own.length === 0){
+    body.innerHTML = `
+      <div class="empty"><p>Du hast noch keine Rubrik mit Karten zum Teilen.</p></div>
+      <div class="sheet-actions" style="margin-top:16px;">
+        <button class="btn-secondary" id="shareBackBtn">Zurück</button>
+      </div>
+    `;
+    document.getElementById('shareBackBtn').addEventListener('click', () => openGroupDetail(code));
+    return;
+  }
+
+  let html = '<p class="crop-hint">Welche Rubrik möchtest du teilen? Alle Karten darin werden mitgeschickt (ohne deinen Lernfortschritt).</p>';
+  own.forEach(o => {
+    html += `
+      <div class="group-item" data-share="${o.cat.id}">
+        <div>
+          <div class="group-item-name">${escapeHtml(o.cat.name)}</div>
+          <div class="group-item-code">${o.count} Karte(n)</div>
+        </div>
+        <span style="color:var(--copper);">›</span>
+      </div>
+    `;
+  });
+  html += `
+    <div class="form-error" id="shareStatus" style="color:var(--muted);"></div>
+    <div class="sheet-actions" style="margin-top:16px;">
+      <button class="btn-secondary" id="shareBackBtn">Zurück</button>
+    </div>
+  `;
+
+  body.innerHTML = html;
+  document.getElementById('shareBackBtn').addEventListener('click', () => openGroupDetail(code));
+  document.querySelectorAll('[data-share]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const cat = categories.find(c => c.id === el.dataset.share);
+      if(!cat) return;
+      const statusEl = document.getElementById('shareStatus');
+      statusEl.textContent = 'Wird geteilt …';
+      const payload = {
+        name: cat.name,
+        sharedBy: displayName || 'unbekannt',
+        createdAt: Date.now(),
+        cards: cards
+          .filter(c => c.categoryId === cat.id)
+          .map(c => ({ question: c.question, options: c.options, correctIndex: c.correctIndex }))
+      };
+      const ok = await shareCategoryToGroup(code, payload);
+      if(ok){
+        await openGroupDetail(code);
+      }else{
+        statusEl.textContent = 'Teilen fehlgeschlagen. Bitte nochmal versuchen.';
+      }
+    });
+  });
+}
+
+// Geteilte Rubrik bei sich selbst hinzufügen
+async function importSharedCategory(code, share){
+  if(!share) return;
+  const statusEl = document.getElementById('shareStatus');
+  if(statusEl) statusEl.textContent = 'Wird hinzugefügt …';
+
+  // Rubrik mit gleichem Namen wiederverwenden, sonst neu anlegen
+  let target = categories.find(c => c.name.toLowerCase() === (share.name || '').toLowerCase());
+  if(!target){
+    target = { id: 'cat-' + Date.now().toString(36), name: share.name || 'Geteilte Rubrik' };
+    categories.push(target);
+    await saveCategories();
+  }
+
+  let added = 0, skipped = 0;
+  (share.cards || []).forEach((c, i) => {
+    const normalized = (c.question || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const exists = cards.some(existing =>
+      existing.categoryId === target.id &&
+      existing.question.replace(/\s+/g, ' ').trim().toLowerCase() === normalized
+    );
+    if(exists){ skipped++; return; }
+    cards.push({
+      id: Date.now().toString(36) + '-' + i,
+      question: c.question,
+      options: c.options,
+      correctIndex: c.correctIndex,
+      streak: 0,
+      categoryId: target.id
+    });
+    added++;
+  });
+
+  await saveCards();
+  render();
+
+  if(statusEl){
+    statusEl.textContent = `${added} Karte(n) zu "${target.name}" hinzugefügt` + (skipped > 0 ? `, ${skipped} bereits vorhanden.` : '.');
+  }
 }
 
 document.getElementById('groupsBtn').addEventListener('click', openGroupScreen);
