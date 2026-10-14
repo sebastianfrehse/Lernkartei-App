@@ -330,6 +330,8 @@
   }
   .form-error{color:var(--red);font-size:12.5px;margin-top:10px;min-height:16px;}
   .form-warning{color:var(--yellow);font-size:12.5px;margin-top:6px;line-height:1.5;}
+.reset-link{display:none;margin-top:12px;width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--green);padding:11px;border-radius:8px;font-size:14px;}
+.reset-green-btn{display:none;margin-top:8px;background:none;color:var(--muted);font-size:12.5px;padding:4px 0;text-decoration:underline;text-align:left;}
 
   select{
     width:100%;
@@ -477,6 +479,7 @@
       <span id="progLabel">0 Karten</span>
       <span id="progGruen">0 sicher</span>
     </div>
+<button class="reset-green-btn" id="resetGreenBtn"></button>
   </header>
 
   <main id="cardList"></main>
@@ -517,6 +520,7 @@
         <button class="btn-secondary" id="cancelBtn">Abbrechen</button>
         <button class="btn-primary" id="saveBtn">Speichern</button>
       </div>
+      <button class="reset-link" id="resetCardBtn">↺ Fortschritt zurücksetzen (nochmal üben)</button>
       <button class="danger-link" id="deleteBtn" style="display:none;">Karte löschen</button>
     </div>
   </div>
@@ -677,6 +681,8 @@ let categories = [];
 let selectedCategoryId = null; // null = "Alle"
 let editingId = null;
 let duplicateConfirmed = false;
+let resetGreenConfirmed = false;
+let resetGreenTimer = null;
 let displayName = '';
 let myGroups = []; // [{code, name}]
 let currentGroupCode = null;
@@ -862,6 +868,11 @@ function render(){
   }
   document.getElementById('progLabel').textContent = total + (total===1?' Karte':' Karten');
   document.getElementById('progGruen').textContent = gruen + ' sicher';
+  clearTimeout(resetGreenTimer);
+  resetGreenConfirmed = false;
+  const resetGreenBtn = document.getElementById('resetGreenBtn');
+  resetGreenBtn.style.display = gruen > 0 ? 'block' : 'none';
+  resetGreenBtn.textContent = '↺ Grüne Karten ' + (selectedCategoryId === null ? '(alle Rubriken)' : 'dieser Rubrik') + ' zurücksetzen';
 
   if(total===0){
     list.innerHTML = '<div class="empty"><p>Noch keine Karten in dieser Rubrik.</p><p>Leg deine erste Karte an — per Hand oder per Foto.</p></div>';
@@ -998,6 +1009,7 @@ function openAdd(){
   document.getElementById('formError').textContent = '';
   document.getElementById('duplicateWarning').textContent = '';
   document.getElementById('deleteBtn').style.display = 'none';
+  document.getElementById('resetCardBtn').style.display = 'none';
   resetRawText();
   populateCategorySelect(selectedCategoryId);
   renderOptionRows(['', '', '', '', ''], null);
@@ -1015,6 +1027,7 @@ function openEdit(id){
   document.getElementById('formError').textContent = '';
   document.getElementById('duplicateWarning').textContent = '';
   document.getElementById('deleteBtn').style.display = 'block';
+  document.getElementById('resetCardBtn').style.display = statusOf(card) === 'gruen' ? 'block' : 'none';
   resetRawText();
   populateCategorySelect(card.categoryId);
   renderOptionRows(card.options, card.correctIndex);
@@ -1094,6 +1107,37 @@ async function saveSheet(){
   closeSheet();
   render();
 }
+
+// --- Fortschritt zurücksetzen (grüne Karten nochmal üben) ---
+async function resetCardProgress(){
+  if(!editingId) return;
+  const card = cards.find(c=>c.id===editingId);
+  if(!card) return;
+  card.streak = 0;
+  await saveCards();
+  closeSheet();
+  render();
+}
+function greenCardsInView(){
+  return cards.filter(c => (selectedCategoryId === null || c.categoryId === selectedCategoryId) && statusOf(c) === 'gruen');
+}
+async function resetGreenCards(){
+  const btn = document.getElementById('resetGreenBtn');
+  const greens = greenCardsInView();
+  if(greens.length === 0) return;
+  if(!resetGreenConfirmed){
+    resetGreenConfirmed = true;
+    btn.textContent = greens.length + (greens.length === 1 ? ' grüne Karte' : ' grüne Karten') + ' wieder auf Rot setzen? Nochmal tippen zum Bestätigen';
+    clearTimeout(resetGreenTimer);
+    resetGreenTimer = setTimeout(render, 4000);
+    return;
+  }
+  greens.forEach(c => { c.streak = 0; });
+  await saveCards();
+  render();
+}
+document.getElementById('resetGreenBtn').addEventListener('click', resetGreenCards);
+document.getElementById('resetCardBtn').addEventListener('click', resetCardProgress);
 
 async function deleteCard(){
   if(!editingId) return;
@@ -1540,9 +1584,17 @@ function renderLearnCard(){
       <div class="learn-done">Aktuell gibt es keine Karten zum Üben — entweder sind alle grün, oder du hast noch keine angelegt.</div>
       <div class="learn-done-actions">
         <button class="btn-primary" id="learnDoneClose">Zurück zu den Rubriken</button>
+${greenCardsInView().length > 0 ? '<button class="btn-secondary" id="learnResetGreen">Grüne Karten zurücksetzen und nochmal üben</button>' : ''}
       </div>
     `;
     document.getElementById('learnDoneClose').addEventListener('click', closeLearning);
+    const learnResetGreen = document.getElementById('learnResetGreen');
+    if(learnResetGreen) learnResetGreen.addEventListener('click', async ()=>{
+      greenCardsInView().forEach(c => { c.streak = 0; });
+      await saveCards();
+      render();
+      startLearning();
+    });
     return;
   }
   if(learnIndex >= learnQueue.length){
