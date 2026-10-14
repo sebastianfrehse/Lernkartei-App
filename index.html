@@ -332,6 +332,8 @@
   .form-warning{color:var(--yellow);font-size:12.5px;margin-top:6px;line-height:1.5;}
 .reset-link{display:none;margin-top:12px;width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--green);padding:11px;border-radius:8px;font-size:14px;}
 .reset-green-btn{display:none;margin-top:8px;background:none;color:var(--muted);font-size:12.5px;padding:4px 0;text-decoration:underline;text-align:left;}
+.import-help{font-size:12px;color:var(--muted);line-height:1.5;margin-top:6px;}
+#importText{min-height:220px;font-family:'IBM Plex Mono',monospace;font-size:13px;}
 
   select{
     width:100%;
@@ -506,6 +508,7 @@
       <input type="file" accept="image/*" capture="environment" id="cameraInput" style="position:absolute;width:1px;height:1px;opacity:0;">
       <label class="ocr-btn" for="galleryInput" style="margin-top:8px;">🖼️ Bild aus Galerie wählen</label>
       <input type="file" accept="image/*" id="galleryInput" style="position:absolute;width:1px;height:1px;opacity:0;">
+      <button class="ocr-btn" id="openImportBtn" type="button" style="margin-top:8px;">📋 Mehrere Karten aus Text importieren</button>
       <div class="ocr-status" id="ocrStatus"></div>
       <label class="field-label" id="rawTextLabel" style="display:none;">Erkannter Text komplett (zur Kontrolle, hier kannst du Textteile kopieren)</label>
       <textarea id="rawOcrText" rows="4" style="display:none;"></textarea>
@@ -525,7 +528,25 @@
     </div>
   </div>
 
-  <!-- Rubrik anlegen/bearbeiten -->
+  <!-- Mehrere Karten aus Text importieren -->
+<div class="sheet-overlay" id="importOverlay">
+<div class="sheet">
+<h2>Karten importieren</h2>
+<label class="field-label">Rubrik</label>
+<select id="importCategorySelect"></select>
+<input type="text" id="importNewCategoryInput" placeholder="Name der neuen Rubrik" style="display:none;margin-top:8px;">
+<label class="field-label">Text mit Fragen</label>
+<textarea id="importText" placeholder="Was ist das oberste Ziel einer Unternehmung?&#10;*1) Erwirtschaften von Gewinn&#10;2) ...&#10;3) ...&#10;4) ...&#10;5) ..."></textarea>
+<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen.</div>
+<div class="form-error" id="importError"></div>
+<div class="sheet-actions">
+<button class="btn-secondary" id="importCancelBtn">Abbrechen</button>
+<button class="btn-primary" id="importConfirmBtn">Importieren</button>
+</div>
+</div>
+</div>
+
+<!-- Rubrik anlegen/bearbeiten -->
   <div class="sheet-overlay" id="categoryOverlay">
     <div class="sheet">
       <h2 id="categoryOverlayTitle">Neue Rubrik</h2>
@@ -1146,6 +1167,99 @@ async function deleteCard(){
   closeSheet();
   render();
 }
+
+// --- Mehrere Karten aus Text importieren ---
+function fillImportCategorySelect(){
+  const sel = document.getElementById('importCategorySelect');
+  sel.innerHTML = '';
+  categories.forEach(cat => {
+    const o = document.createElement('option');
+    o.value = cat.id;
+    o.textContent = cat.name;
+    sel.appendChild(o);
+  });
+  const n = document.createElement('option');
+  n.value = '__new__';
+  n.textContent = '+ Neue Rubrik…';
+  sel.appendChild(n);
+  sel.value = selectedCategoryId && categories.some(c=>c.id===selectedCategoryId) ? selectedCategoryId : (categories[0] ? categories[0].id : '__new__');
+  document.getElementById('importNewCategoryInput').style.display = sel.value === '__new__' ? 'block' : 'none';
+  document.getElementById('importNewCategoryInput').value = '';
+}
+function openImport(){
+  closeSheet();
+  fillImportCategorySelect();
+  document.getElementById('importText').value = '';
+  document.getElementById('importError').textContent = '';
+  document.getElementById('importOverlay').classList.add('open');
+}
+function closeImport(){
+  document.getElementById('importOverlay').classList.remove('open');
+}
+function parseImportText(text){
+  const blocks = text.replace(/\r/g, '').split(/\n\s*\n/).map(b => b.trim()).filter(b => b);
+  const result = [];
+  const problems = [];
+  blocks.forEach((block, bi) => {
+    const qLines = [];
+    const options = [];
+    let correctIndex = null;
+    block.split('\n').map(l => l.trim()).filter(l => l).forEach(line => {
+      const m = line.match(/^(\*?)\s*([1-5])\s*[).:]\s*(\*?)\s*(.+)$/);
+      if(m && qLines.length > 0){
+        if(m[1] || m[3]) correctIndex = options.length;
+        options.push(m[4].trim());
+      }else if(options.length > 0){
+        options[options.length - 1] += ' ' + line; // Antwort geht über mehrere Zeilen
+      }else{
+        qLines.push(line);
+      }
+    });
+    const question = qLines.join(' ').trim();
+    const label = 'Frage ' + (bi + 1) + (question ? ' ("' + question.slice(0, 30) + '…")' : '');
+    if(!question) problems.push(label + ': keine Frage gefunden');
+    else if(options.length !== NUM_OPTIONS) problems.push(label + ': ' + options.length + ' statt 5 Antworten');
+    else if(correctIndex === null) problems.push(label + ': keine richtige Antwort mit * markiert');
+    else result.push({ question, options, correctIndex });
+  });
+  return { result, problems };
+}
+async function importCards(){
+  const errEl = document.getElementById('importError');
+  const { result, problems } = parseImportText(document.getElementById('importText').value);
+  if(problems.length){ errEl.textContent = problems.join(' · '); return; }
+  if(result.length === 0){ errEl.textContent = 'Bitte zuerst den Text mit den Fragen einfügen.'; return; }
+  const sel = document.getElementById('importCategorySelect').value;
+  let categoryId = sel;
+  if(sel === '__new__'){
+    const name = document.getElementById('importNewCategoryInput').value.trim();
+    if(!name){ errEl.textContent = 'Bitte einen Namen für die neue Rubrik eingeben.'; return; }
+    const cat = { id: 'cat-' + Date.now().toString(36), name };
+    categories.push(cat);
+    await saveCategories();
+    categoryId = cat.id;
+  }
+  const norm = s => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const existing = new Set(cards.map(c => norm(c.question)));
+  let added = 0, skipped = 0;
+  result.forEach((r, i) => {
+    if(existing.has(norm(r.question))){ skipped++; return; }
+    existing.add(norm(r.question));
+    cards.push({ id: Date.now().toString(36) + '-' + i, question: r.question, options: r.options, correctIndex: r.correctIndex, streak: 0, categoryId });
+    added++;
+  });
+  await saveCards();
+  selectedCategoryId = categoryId;
+  closeImport();
+  render();
+  alert(added + (added === 1 ? ' Karte' : ' Karten') + ' importiert' + (skipped ? ', ' + skipped + ' doppelte übersprungen' : '') + '.');
+}
+document.getElementById('openImportBtn').addEventListener('click', openImport);
+document.getElementById('importCancelBtn').addEventListener('click', closeImport);
+document.getElementById('importConfirmBtn').addEventListener('click', importCards);
+document.getElementById('importCategorySelect').addEventListener('change', (e)=>{
+  document.getElementById('importNewCategoryInput').style.display = e.target.value === '__new__' ? 'block' : 'none';
+});
 
 // --- OCR ---
 function parseOcrText(text){
