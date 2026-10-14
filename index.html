@@ -333,6 +333,8 @@
 .reset-link{display:none;margin-top:12px;width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--green);padding:11px;border-radius:8px;font-size:14px;}
 .reset-green-btn{display:none;margin-top:8px;background:none;color:var(--muted);font-size:12.5px;padding:4px 0;text-decoration:underline;text-align:left;}
 .import-help{font-size:12px;color:var(--muted);line-height:1.5;margin-top:6px;}
+.cat-menu-btn{display:block;width:100%;text-align:left;margin-top:10px;}
+.cat-menu-danger{color:var(--red);}
 #importText{min-height:220px;font-family:'IBM Plex Mono',monospace;font-size:13px;}
 
   select{
@@ -475,7 +477,7 @@
       <button class="header-icon-btn" id="groupsBtn">👥</button>
     </div>
     <div class="cat-row" id="catRow"></div>
-    <div class="cat-hint">Rubrik gedrückt halten zum Umbenennen/Löschen</div>
+    <div class="cat-hint">Rubrik gedrückt halten zum Umbenennen, Zurücksetzen oder Löschen</div>
     <div class="progress-row" id="progressRow"></div>
     <div class="progress-labels">
       <span id="progLabel">0 Karten</span>
@@ -528,7 +530,18 @@
     </div>
   </div>
 
-  <!-- Mehrere Karten aus Text importieren -->
+  <!-- Rubrik-Menü (lange drücken) -->
+<div class="sheet-overlay" id="catMenuOverlay">
+<div class="sheet">
+<h2 id="catMenuTitle">Rubrik</h2>
+<button class="btn-secondary cat-menu-btn" id="catMenuRename">✏️ Umbenennen</button>
+<button class="btn-secondary cat-menu-btn" id="catMenuReset">↺ Grüne Karten zurücksetzen</button>
+<button class="btn-secondary cat-menu-btn cat-menu-danger" id="catMenuDelete">🗑️ Rubrik löschen</button>
+<button class="danger-link" id="catMenuClose" style="color:var(--muted);width:100%;">Abbrechen</button>
+</div>
+</div>
+
+<!-- Mehrere Karten aus Text importieren -->
 <div class="sheet-overlay" id="importOverlay">
 <div class="sheet">
 <h2>Karten importieren</h2>
@@ -837,7 +850,7 @@ function renderCategoryRow(){
       longPressTriggered = false;
       pressTimer = setTimeout(() => {
         longPressTriggered = true;
-        openCategoryOverlay(cat.id);
+        openCategoryMenu(cat.id);
       }, 500);
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(evt => {
@@ -892,7 +905,7 @@ function render(){
   clearTimeout(resetGreenTimer);
   resetGreenConfirmed = false;
   const resetGreenBtn = document.getElementById('resetGreenBtn');
-  resetGreenBtn.style.display = gruen > 0 ? 'block' : 'none';
+  resetGreenBtn.style.display = 'none'; // Zurücksetzen ist jetzt im Rubrik-Menü (lange drücken)
   resetGreenBtn.textContent = '↺ Grüne Karten ' + (selectedCategoryId === null ? '(alle Rubriken)' : 'dieser Rubrik') + ' zurücksetzen';
 
   if(total===0){
@@ -971,6 +984,66 @@ async function deleteCategoryForm(){
   closeCategoryOverlay();
   render();
 }
+// --- Rubrik-Menü (lange drücken): Umbenennen, Zurücksetzen, Löschen ---
+let catMenuId = null;
+let catMenuConfirm = null; // 'reset' oder 'delete'
+function catMenuGreens(){
+  return cards.filter(c => c.categoryId === catMenuId && statusOf(c) === 'gruen');
+}
+function updateCatMenu(){
+  const cat = categories.find(c => c.id === catMenuId);
+  if(!cat) return;
+  const greens = catMenuGreens().length;
+  const count = cards.filter(c => c.categoryId === catMenuId).length;
+  document.getElementById('catMenuTitle').textContent = cat.name;
+  const resetBtn = document.getElementById('catMenuReset');
+  resetBtn.textContent = catMenuConfirm === 'reset'
+    ? '↺ Wirklich ' + greens + (greens === 1 ? ' grüne Karte' : ' grüne Karten') + ' auf Rot setzen? Nochmal tippen'
+    : '↺ Grüne Karten zurücksetzen (' + greens + ')';
+  resetBtn.disabled = greens === 0;
+  resetBtn.style.opacity = greens === 0 ? '0.5' : '1';
+  document.getElementById('catMenuDelete').textContent = catMenuConfirm === 'delete'
+    ? '🗑️ Wirklich löschen?' + (count > 0 ? ' ' + count + (count === 1 ? ' Karte geht' : ' Karten gehen') + ' mit verloren.' : '') + ' Nochmal tippen'
+    : '🗑️ Rubrik löschen';
+}
+function openCategoryMenu(catId){
+  catMenuId = catId;
+  catMenuConfirm = null;
+  updateCatMenu();
+  document.getElementById('catMenuOverlay').classList.add('open');
+}
+function closeCategoryMenu(){
+  document.getElementById('catMenuOverlay').classList.remove('open');
+  catMenuConfirm = null;
+}
+document.getElementById('catMenuRename').addEventListener('click', ()=>{
+  const id = catMenuId;
+  closeCategoryMenu();
+  openCategoryOverlay(id);
+  document.getElementById('categoryDeleteBtn').style.display = 'none';
+});
+document.getElementById('catMenuReset').addEventListener('click', async ()=>{
+  const greens = catMenuGreens();
+  if(greens.length === 0) return;
+  if(catMenuConfirm !== 'reset'){ catMenuConfirm = 'reset'; updateCatMenu(); return; }
+  greens.forEach(c => { c.streak = 0; });
+  await saveCards();
+  closeCategoryMenu();
+  render();
+});
+document.getElementById('catMenuDelete').addEventListener('click', async ()=>{
+  if(catMenuConfirm !== 'delete'){ catMenuConfirm = 'delete'; updateCatMenu(); return; }
+  const id = catMenuId;
+  categories = categories.filter(c => c.id !== id);
+  cards = cards.filter(c => c.categoryId !== id);
+  await saveCategories();
+  await saveCards();
+  if(selectedCategoryId === id) selectedCategoryId = null;
+  closeCategoryMenu();
+  render();
+});
+document.getElementById('catMenuClose').addEventListener('click', closeCategoryMenu);
+
 document.getElementById('categoryCancelBtn').addEventListener('click', closeCategoryOverlay);
 document.getElementById('categorySaveBtn').addEventListener('click', saveCategoryForm);
 document.getElementById('categoryDeleteBtn').addEventListener('click', deleteCategoryForm);
