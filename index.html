@@ -492,6 +492,25 @@
   /* Elektro-Rechner */
   #calcScreen{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:25;}
   #calcScreen.open{display:flex;}
+  /* angedockt beim Lernen: Rechner oben, Nebenrechnung unten sichtbar */
+  #calcScreen.docked{bottom:auto;height:60%;border-bottom:3px solid var(--copper);}
+  body:has(#calcScreen.docked.open) #scratchPanel{flex-basis:40%;}
+  body:has(#calcScreen.docked.open) .scratch-bar{display:none;}
+  body:has(#calcScreen.docked.open) #scratchPad{display:none;}
+  #calcScreen.docked .learn-top{padding:6px 14px 4px;}
+  #calcScreen.docked .calc-tabs{padding:0 14px 6px;}
+  #calcScreen.docked .calc-tab{padding:5px;font-size:13px;}
+  #calcScreen.docked .calc-display{padding:6px 10px;margin-bottom:6px;}
+  #calcScreen.docked .calc-expr{font-size:15px;min-height:20px;}
+  #calcScreen.docked .calc-res{font-size:20px;min-height:24px;margin-top:0;}
+  #calcScreen.docked .calc-hint{display:none;}
+  #calcScreen.docked .calc-mode{margin-bottom:4px;}
+  #calcScreen.docked .calc-mode span{display:none;}
+  #calcScreen.docked .calc-mode button{padding:2px 8px;}
+  #calcScreen.docked #calcPane{padding-bottom:6px;}
+  #calcScreen.docked .calc-grid{flex:1;grid-auto-rows:1fr;gap:4px;min-height:0;}
+  #calcScreen.docked .calc-grid button{padding:0;font-size:14px;}
+  #calcScreen.docked .calc-grid button.num{font-size:16px;}
   .calc-tabs{display:flex;gap:8px;padding:0 20px 10px;}
   .calc-tab{flex:1;background:var(--surface2);color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:9px;font-size:14px;}
   .calc-tab.active{background:var(--copper);color:#1b1d1f;font-weight:600;border-color:var(--copper);}
@@ -2721,6 +2740,7 @@ if('serviceWorker' in navigator){
   window.formatElektroNumber = fmt;
 
   function show(){
+    if(window.scratchLive) scratchLive(justEval ? '' : expr.replace(/Ans/g, fmt(ans)));
     $('calcExpr').textContent = justEval && shownExpr ? shownExpr : expr;
     if(!expr){ $('calcRes').textContent = fmt(ans); $('calcHint').textContent = ''; return; }
     try{ const r = evaluate(expr); $('calcRes').textContent = (justEval ? '' : '≈ ') + fmt(r); $('calcHint').textContent = prefixHint(r); }
@@ -2730,7 +2750,7 @@ if('serviceWorker' in navigator){
     if(v === 'AC'){ expr = ''; justEval = false; }
     else if(v === 'DEL'){ expr = expr.replace(/(asin\(|acos\(|atan\(|sin\(|cos\(|tan\(|Ans|√3|√2|√\(|1\/\(|.)$/,''); justEval = false; }
     else if(v === '='){
-      try{ const before = expr; ans = evaluate(expr); shownExpr = before + ' ='; if(window.scratchWrite) scratchWrite(before + ' = ' + fmt(ans)); expr = fmt(ans).replace(' ×10^','E'); justEval = true; }
+      try{ const before = expr; const paperExpr = expr.replace(/Ans/g, fmt(ans)); ans = evaluate(expr); shownExpr = before + ' ='; if(window.scratchWrite) scratchWrite(paperExpr + ' = ' + fmt(ans)); expr = fmt(ans).replace(' ×10^','E'); justEval = true; }
       catch(e){ justEval = true; $('calcExpr').textContent = expr; $('calcRes').textContent = 'Fehler'; return; }
     }else{
       // nach "=" mit Rechenzeichen weiterrechnen, mit Zahl neu anfangen
@@ -2848,8 +2868,21 @@ if('serviceWorker' in navigator){
   }
   document.querySelectorAll('.calc-tab').forEach(b => b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
   renderFormulas();
-  window.openCalc = function(){ show(); $('calcScreen').classList.add('open'); };
-  window.closeCalc = function(){ $('calcScreen').classList.remove('open'); };
+  window.openCalc = function(){
+    // Beim Lernen: Rechner oben, Nebenrechnung bleibt unten sichtbar
+    const inLearn = document.getElementById('learn').classList.contains('open');
+    $('calcScreen').classList.toggle('docked', inLearn);
+    $('calcScreen').classList.add('open');
+    if(inLearn && window.openScratch && !document.getElementById('scratchPanel').classList.contains('open')) openScratch();
+    if(window.scratchRefresh) requestAnimationFrame(scratchRefresh);
+    show();
+  };
+  window.closeCalc = function(){
+    $('calcScreen').classList.remove('open');
+    $('calcScreen').classList.remove('docked');
+    if(window.scratchLive) scratchLive('');
+    if(window.scratchRefresh) requestAnimationFrame(scratchRefresh);
+  };
   $('calcBtn').addEventListener('click', openCalc);
   $('learnCalcBtn').addEventListener('click', openCalc);
   $('calcClose').addEventListener('click', closeCalc);
@@ -2893,6 +2926,12 @@ if('serviceWorker' in navigator){
     for(let y = Math.floor(y0/20)*20; y <= y1; y += 20){ ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
     ctx.stroke();
     ctx.drawImage(paper, 0, 0, PW, PH);
+    if(liveText){
+      // gerade im Rechner getippte Rechnung (noch nicht mit = abgeschlossen)
+      ctx.fillStyle = 'rgba(27,58,138,0.55)';
+      ctx.font = '17px "Segoe Print", "Comic Sans MS", "Chalkboard SE", cursive';
+      ctx.fillText(liveText + ' …', 12 - ox/z, textY + LINE_H);
+    }
   }
   const requestRender = () => { if(!rafPending){ rafPending = true; requestAnimationFrame(render); } };
   function resize(){
@@ -2932,6 +2971,9 @@ if('serviceWorker' in navigator){
     pending.push(t);
     if(!panel.classList.contains('open')) openScratch(); else flush();
   };
+  let liveText = '';
+  window.scratchLive = function(t){ liveText = t || ''; requestRender(); };
+  window.scratchRefresh = function(){ if(panel.classList.contains('open')) resize(); };
   window.clearScratch = function(){
     pctx.save(); pctx.setTransform(1,0,0,1,0,0); pctx.clearRect(0,0,paper.width,paper.height); pctx.restore();
     textY = 0; pending = []; ox = 0; oy = 0; clampView(); requestRender();
