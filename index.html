@@ -372,7 +372,8 @@
   body:has(#learn.open) .fab-row,
   body:has(.sheet-overlay.open) .fab-row,
   body:has(#groupScreen.open) .fab-row,
-  body:has(#cropScreen.open) .fab-row{display:none;}
+  body:has(#cropScreen.open) .fab-row,
+  body:has(#calcScreen.open) .fab-row{display:none;}
   /* Platz unter der Kartenliste, damit die letzten Karten nicht unter den Knöpfen liegen */
   #cardList{padding-bottom:140px;}
   .learn-top{
@@ -488,6 +489,41 @@
   /* Professor-Figur unten rechts im Hintergrund */
   #profDeco{position:fixed;right:max(0px, calc(50vw - 220px));bottom:0;width:150px;height:200px;opacity:.5;pointer-events:none;z-index:1;}
   header, #cardList{position:relative;z-index:2;}
+  /* Elektro-Rechner */
+  #calcScreen{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:25;}
+  #calcScreen.open{display:flex;}
+  .calc-tabs{display:flex;gap:8px;padding:0 20px 10px;}
+  .calc-tab{flex:1;background:var(--surface2);color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:9px;font-size:14px;}
+  .calc-tab.active{background:var(--copper);color:#1b1d1f;font-weight:600;border-color:var(--copper);}
+  .calc-body{flex:1;overflow-y:auto;padding:0 14px 16px;display:flex;flex-direction:column;}
+  .calc-display{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+  .calc-expr{font-family:'IBM Plex Mono',monospace;font-size:20px;min-height:28px;word-break:break-all;text-align:right;}
+  .calc-res{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:var(--copper);text-align:right;min-height:34px;margin-top:4px;}
+  .calc-hint{font-size:12px;color:var(--muted);text-align:right;min-height:16px;}
+  .calc-mode{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px;}
+  .calc-mode button{background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:12px;}
+  .calc-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;}
+  .calc-grid button{background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:13px 2px;font-size:16px;font-family:'IBM Plex Sans',sans-serif;}
+  .calc-grid button.fn{font-size:14px;color:#cfd3d6;background:#24272a;}
+  .calc-grid button.num{background:#3a3f43;font-size:19px;font-weight:500;}
+  .calc-grid button.op{color:var(--copper);font-size:20px;}
+  .calc-grid button.pre{color:#8fc1e3;font-size:15px;}
+  .calc-grid button.eq{background:var(--copper);color:#1b1d1f;font-weight:700;font-size:20px;}
+  .calc-grid button.clr{color:var(--red);}
+  .calc-grid button:active{filter:brightness(1.4);}
+  .f-item{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden;}
+  .f-head{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .f-name{font-size:14px;font-weight:600;}
+  .f-formula{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--copper);margin-top:3px;}
+  .f-body{display:none;padding:0 14px 14px;}
+  .f-item.open .f-body{display:block;}
+  .f-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .f-row label{width:110px;font-size:13px;color:var(--muted);}
+  .f-row input{flex:1;}
+  .f-unit{width:40px;font-size:13px;color:var(--muted);}
+  .f-out{font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--copper);margin:6px 0 8px;min-height:24px;}
+  .f-group{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 2px 8px;}
+  .learn-calc{background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:5px 10px;font-size:16px;}
 </style>
 </head>
 <body>
@@ -588,7 +624,10 @@
   <header>
     <div class="header-top">
       <h1>Lernkartei</h1>
-      <button class="header-icon-btn" id="groupsBtn">👥</button>
+      <div style="display:flex;gap:8px;">
+        <button class="header-icon-btn" id="calcBtn" title="Rechner">🧮</button>
+        <button class="header-icon-btn" id="groupsBtn">👥</button>
+      </div>
     </div>
     <div class="cat-row" id="catRow"></div>
     <div class="cat-hint">Rubrik gedrückt halten zum Umbenennen, Zurücksetzen oder Löschen</div>
@@ -710,9 +749,32 @@
   <div id="learn">
     <div class="learn-top">
       <button class="learn-close" id="learnClose">✕ Schließen</button>
+      <button class="learn-calc" id="learnCalcBtn" type="button">🧮 Rechner</button>
       <span class="learn-count" id="learnCount"></span>
     </div>
     <div class="learn-body" id="learnBody"></div>
+  </div>
+
+  <!-- Elektro-Rechner -->
+  <div id="calcScreen">
+    <div class="learn-top">
+      <button class="learn-close" id="calcClose">✕ Schließen</button>
+      <span class="learn-count">Elektro-Rechner</span>
+    </div>
+    <div class="calc-tabs">
+      <button class="calc-tab active" data-tab="calc">Taschenrechner</button>
+      <button class="calc-tab" data-tab="formulas">Formeln</button>
+    </div>
+    <div class="calc-body" id="calcPane">
+      <div class="calc-display">
+        <div class="calc-expr" id="calcExpr"></div>
+        <div class="calc-res" id="calcRes">0</div>
+        <div class="calc-hint" id="calcHint"></div>
+      </div>
+      <div class="calc-mode"><span>Vorsätze: k=10³ M=10⁶ m=10⁻³ µ=10⁻⁶ · z.B. 4,7k</span><button id="calcDegBtn" type="button">DEG</button></div>
+      <div class="calc-grid" id="calcGrid"></div>
+    </div>
+    <div class="calc-body" id="formulaPane" style="display:none;"></div>
   </div>
 
   <!-- Bild groß ansehen -->
@@ -2557,11 +2619,189 @@ if('serviceWorker' in navigator){
   });
 }
 
+
+// --- Elektro-Rechner ---
+(function(){
+  const KEYS = [
+    ['sin','fn','sin('],['cos','fn','cos('],['tan','fn','tan('],['√','fn','√('],['x²','fn','²'],
+    ['sin⁻¹','fn','asin('],['cos⁻¹','fn','acos('],['tan⁻¹','fn','atan('],['xʸ','fn','^'],['1/x','fn','1/('],
+    ['π','fn','π'],['√3','fn','√3'],['√2','fn','√2'],['(','fn','('],[')','fn',')'],
+    ['k','pre','k'],['M','pre','M'],['m','pre','m'],['µ','pre','µ'],['n','pre','n'],
+    ['7','num','7'],['8','num','8'],['9','num','9'],['⌫','clr','DEL'],['AC','clr','AC'],
+    ['4','num','4'],['5','num','5'],['6','num','6'],['×','op','×'],['÷','op','÷'],
+    ['1','num','1'],['2','num','2'],['3','num','3'],['+','op','+'],['−','op','−'],
+    ['0','num','0'],[',','num',','],['×10ˣ','fn','E'],['Ans','fn','Ans'],['=','eq','=']
+  ];
+  let expr = '', ans = 0, deg = true, justEval = false, shownExpr = '';
+  const $ = id => document.getElementById(id);
+  const PRE = { G:'1e9', M:'1e6', k:'1e3', m:'1e-3', 'µ':'1e-6', n:'1e-9', p:'1e-12' };
+
+  function toJs(e){
+    let t = e.replace(/\s/g,'');
+    t = t.replace(/,/g,'.').replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-').replace(/\^/g,'**').replace(/²/g,'**2');
+    t = t.replace(/Ans/g,'(A)').replace(/√3/g,'(Q3)').replace(/√2/g,'(Q2)').replace(/π/g,'(PI)').replace(/√\(/g,'SQ(');
+    t = t.replace(/(\d|\.)E(-?\d)/g,'$1e$2');
+    // Vorsätze direkt hinter Zahl oder Klammer
+    t = t.replace(/([\d.)])([GMkmµnp])(?![a-z])/g, (m0,a,b)=> a + '*' + PRE[b]);
+    // Malpunkt weglassen erlaubt: 2π, 2(…), )( , 2√
+    t = t.replace(/(\d|\))(\(|SQ|asin|acos|atan|sin|cos|tan)/g,'$1*$2');
+    t = t.replace(/\)(\d)/g,')*$1');
+    if(!/^[0-9+\-*/().eA]*$/.test(t.replace(/asin|acos|atan|sin|cos|tan|SQ|PI|Q3|Q2/g,''))) throw new Error('Zeichen');
+    // offene Klammern automatisch schließen
+    const open = (t.match(/\(/g)||[]).length - (t.match(/\)/g)||[]).length;
+    if(open > 0) t += ')'.repeat(open);
+    return t;
+  }
+  function evaluate(e){
+    const k = deg ? Math.PI/180 : 1;
+    const f = new Function('A','Q3','Q2','PI','SQ','sin','cos','tan','asin','acos','atan','return (' + toJs(e) + ');');
+    const r = f(ans, Math.sqrt(3), Math.SQRT2, Math.PI, Math.sqrt,
+      x=>Math.sin(x*k), x=>Math.cos(x*k), x=>Math.tan(x*k),
+      x=>Math.asin(x)/k, x=>Math.acos(x)/k, x=>Math.atan(x)/k);
+    if(typeof r !== 'number' || !isFinite(r)) throw new Error('Ergebnis');
+    return r;
+  }
+  function fmt(x){
+    if(x === 0) return '0';
+    const a = Math.abs(x);
+    let str;
+    if(a >= 1e9 || a < 1e-6) str = x.toExponential(4).replace('e', ' ×10^');
+    else str = String(parseFloat(x.toPrecision(10)));
+    return str.replace('.', ',');
+  }
+  function prefixHint(x){
+    const a = Math.abs(x);
+    if(a === 0 || (a >= 1 && a < 1000)) return '';
+    const list = [[1e9,'G'],[1e6,'M'],[1e3,'k'],[1,''],[1e-3,'m'],[1e-6,'µ'],[1e-9,'n'],[1e-12,'p']];
+    for(const [v,s] of list){ if(a >= v){ return '= ' + String(parseFloat((x/v).toPrecision(6))).replace('.',',') + ' ' + s; } }
+    return '';
+  }
+  window.parseElektroNumber = function(str){ return evaluate(String(str)); };
+  window.formatElektroNumber = fmt;
+
+  function show(){
+    $('calcExpr').textContent = justEval && shownExpr ? shownExpr : expr;
+    if(!expr){ $('calcRes').textContent = fmt(ans); $('calcHint').textContent = ''; return; }
+    try{ const r = evaluate(expr); $('calcRes').textContent = (justEval ? '' : '≈ ') + fmt(r); $('calcHint').textContent = prefixHint(r); }
+    catch(e){ $('calcRes').textContent = justEval ? 'Fehler' : ''; $('calcHint').textContent = ''; }
+  }
+  function press(v){
+    if(v === 'AC'){ expr = ''; justEval = false; }
+    else if(v === 'DEL'){ expr = expr.replace(/(asin\(|acos\(|atan\(|sin\(|cos\(|tan\(|Ans|√3|√2|√\(|1\/\(|.)$/,''); justEval = false; }
+    else if(v === '='){
+      try{ const before = expr; ans = evaluate(expr); shownExpr = before + ' ='; expr = fmt(ans).replace(' ×10^','E'); justEval = true; }
+      catch(e){ justEval = true; $('calcExpr').textContent = expr; $('calcRes').textContent = 'Fehler'; return; }
+    }else{
+      // nach "=" mit Rechenzeichen weiterrechnen, mit Zahl neu anfangen
+      if(justEval && /^[0-9,(πsctaA√]/.test(v) && v !== ',') expr = '';
+      if(justEval && /^[×÷+−^²]/.test(v)) expr = 'Ans';
+      justEval = false;
+      expr += v;
+    }
+    show();
+  }
+  const grid = $('calcGrid');
+  KEYS.forEach(([label, cls, val]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = cls; b.textContent = label;
+    b.addEventListener('click', ()=> press(val));
+    grid.appendChild(b);
+  });
+  $('calcDegBtn').addEventListener('click', ()=>{ deg = !deg; $('calcDegBtn').textContent = deg ? 'DEG' : 'RAD'; show(); });
+
+  // Formelsammlung
+  const F = [
+    ['Grundlagen'],
+    {n:'Ohmsches Gesetz – Spannung', f:'U = R · I', o:'U', u:'V', i:[['R','Widerstand R','Ω'],['I','Strom I','A']], c:v=>v.R*v.I},
+    {n:'Ohmsches Gesetz – Strom', f:'I = U / R', o:'I', u:'A', i:[['U','Spannung U','V'],['R','Widerstand R','Ω']], c:v=>v.U/v.R},
+    {n:'Ohmsches Gesetz – Widerstand', f:'R = U / I', o:'R', u:'Ω', i:[['U','Spannung U','V'],['I','Strom I','A']], c:v=>v.U/v.I},
+    {n:'Reihenschaltung', f:'R = R1 + R2 + R3', o:'R', u:'Ω', i:[['a','R1','Ω'],['b','R2','Ω'],['c','R3 (sonst leer)','Ω','',true]], c:v=>v.a+v.b+v.c},
+    {n:'Parallelschaltung', f:'1/R = 1/R1 + 1/R2 (+ 1/R3)', o:'R', u:'Ω', i:[['a','R1','Ω'],['b','R2','Ω'],['c','R3 (sonst leer)','Ω','',true]], c:v=>1/(1/v.a+1/v.b+(v.c?1/v.c:0))},
+    {n:'Leitungswiderstand (Hin + Rück)', f:'R = 2 · l / (κ · A)', o:'R', u:'Ω', i:[['l','Länge l','m'],['k','κ (Cu 56, Al 35)','m/Ωmm²','56'],['A','Querschnitt A','mm²']], c:v=>2*v.l/(v.k*v.A)},
+    ['Leistung'],
+    {n:'Leistung Gleichstrom', f:'P = U · I', o:'P', u:'W', i:[['U','Spannung U','V'],['I','Strom I','A']], c:v=>v.U*v.I},
+    {n:'Leistung über Widerstand', f:'P = I² · R', o:'P', u:'W', i:[['I','Strom I','A'],['R','Widerstand R','Ω']], c:v=>v.I*v.I*v.R},
+    {n:'Wirkleistung Wechselstrom', f:'P = U · I · cos φ', o:'P', u:'W', i:[['U','Spannung U','V','230'],['I','Strom I','A'],['c','cos φ','']], c:v=>v.U*v.I*v.c},
+    {n:'Wirkleistung Drehstrom', f:'P = √3 · U · I · cos φ', o:'P', u:'W', i:[['U','Spannung U','V','400'],['I','Strom I','A'],['c','cos φ','']], c:v=>Math.sqrt(3)*v.U*v.I*v.c},
+    {n:'Scheinleistung Drehstrom', f:'S = √3 · U · I', o:'S', u:'VA', i:[['U','Spannung U','V','400'],['I','Strom I','A']], c:v=>Math.sqrt(3)*v.U*v.I},
+    {n:'Wirkleistung aus Scheinleistung', f:'P = S · cos φ', o:'P', u:'W', i:[['S','Scheinleistung S','VA'],['c','cos φ','']], c:v=>v.S*v.c},
+    {n:'Blindleistung', f:'Q = √(S² − P²)', o:'Q', u:'var', i:[['S','Scheinleistung S','VA'],['P','Wirkleistung P','W']], c:v=>Math.sqrt(v.S*v.S-v.P*v.P)},
+    {n:'Wirkungsgrad', f:'η = P_ab / P_zu', o:'η', u:'', i:[['a','P_ab (abgegeben)','W'],['z','P_zu (aufgenommen)','W']], c:v=>v.a/v.z},
+    ['Motor / Drehstrom'],
+    {n:'Motorstrom aus dem Netz', f:'I = P / (√3 · U · cos φ · η)', o:'I', u:'A', i:[['P','Leistung P (Schild)','W'],['U','Spannung U','V','400'],['c','cos φ',''],['e','η (z.B. 0,85)','']], c:v=>v.P/(Math.sqrt(3)*v.U*v.c*v.e)},
+    {n:'Strom Wechselstrom-Verbraucher', f:'I = P / (U · cos φ)', o:'I', u:'A', i:[['P','Leistung P','W'],['U','Spannung U','V','230'],['c','cos φ','','1']], c:v=>v.P/(v.U*v.c)},
+    {n:'Synchrondrehzahl', f:'n = f · 60 / p', o:'n', u:'1/min', i:[['f','Frequenz f','Hz','50'],['p','Polpaare p','']], c:v=>v.f*60/v.p},
+    {n:'Schlupf', f:'s = (n_s − n) / n_s · 100', o:'s', u:'%', i:[['a','Synchrondrehzahl n_s','1/min'],['b','Läuferdrehzahl n','1/min']], c:v=>(v.a-v.b)/v.a*100},
+    {n:'Spannungsfall Wechselstrom', f:'ΔU = 2 · l · I · cos φ / (κ · A)', o:'ΔU', u:'V', i:[['l','Länge l','m'],['I','Strom I','A'],['c','cos φ','','1'],['k','κ','m/Ωmm²','56'],['A','Querschnitt A','mm²']], c:v=>2*v.l*v.I*v.c/(v.k*v.A)},
+    {n:'Spannungsfall Drehstrom', f:'ΔU = √3 · l · I · cos φ / (κ · A)', o:'ΔU', u:'V', i:[['l','Länge l','m'],['I','Strom I','A'],['c','cos φ','','1'],['k','κ','m/Ωmm²','56'],['A','Querschnitt A','mm²']], c:v=>Math.sqrt(3)*v.l*v.I*v.c/(v.k*v.A)},
+    ['Wechselstrom'],
+    {n:'Frequenz aus Periodendauer', f:'f = 1 / T', o:'f', u:'Hz', i:[['T','Periodendauer T (z.B. 20m)','s']], c:v=>1/v.T},
+    {n:'Scheitelwert', f:'û = U · √2', o:'û', u:'V', i:[['U','Effektivwert U','V','230']], c:v=>v.U*Math.SQRT2},
+    {n:'Effektivwert', f:'U = û / √2', o:'U', u:'V', i:[['u','Scheitelwert û','V','325']], c:v=>v.u/Math.SQRT2},
+    {n:'Induktiver Blindwiderstand', f:'X_L = 2 · π · f · L', o:'X_L', u:'Ω', i:[['f','Frequenz f','Hz','50'],['L','Induktivität L','H']], c:v=>2*Math.PI*v.f*v.L},
+    {n:'Kapazitiver Blindwiderstand', f:'X_C = 1 / (2 · π · f · C)', o:'X_C', u:'Ω', i:[['f','Frequenz f','Hz','50'],['C','Kapazität C (z.B. 10µ)','F']], c:v=>1/(2*Math.PI*v.f*v.C)},
+    {n:'Scheinwiderstand', f:'Z = √(R² + X²)', o:'Z', u:'Ω', i:[['R','Wirkwiderstand R','Ω'],['X','Blindwiderstand X','Ω']], c:v=>Math.sqrt(v.R*v.R+v.X*v.X)},
+    {n:'Trafo Übersetzung', f:'U2 = U1 · N2 / N1', o:'U2', u:'V', i:[['U','Primärspannung U1','V'],['a','Windungen N1',''],['b','Windungen N2','']], c:v=>v.U*v.b/v.a}
+  ];
+  function renderFormulas(){
+    const pane = $('formulaPane');
+    pane.innerHTML = '<p class="crop-hint" style="margin:0 2px 4px;">Formel antippen, Werte eingeben – Komma und Vorsätze wie 4,7k oder 20m gehen auch.</p>';
+    F.forEach((f, idx) => {
+      if(Array.isArray(f)){ const g = document.createElement('div'); g.className = 'f-group'; g.textContent = f[0]; pane.appendChild(g); return; }
+      const el = document.createElement('div');
+      el.className = 'f-item';
+      el.innerHTML = `<div class="f-head"><div><div class="f-name">${escapeHtml(f.n)}</div><div class="f-formula">${escapeHtml(f.f)}</div></div><span style="color:var(--copper);">›</span></div>
+        <div class="f-body">
+          ${f.i.map(([k,l,u,d]) => `<div class="f-row"><label>${escapeHtml(l)}</label><input type="text" inputmode="decimal" data-k="${k}" value="${d ? d.replace('.',',') : ''}"><span class="f-unit">${escapeHtml(u)}</span></div>`).join('')}
+          <div class="f-out"></div>
+          <button class="btn-secondary f-take" type="button" style="width:100%;padding:10px;">Ergebnis in Taschenrechner übernehmen</button>
+        </div>`;
+      el.querySelector('.f-head').addEventListener('click', ()=> el.classList.toggle('open'));
+      const out = el.querySelector('.f-out');
+      let last = null;
+      const recalc = () => {
+        const v = {}; let ok = true;
+        f.i.forEach(([k,l,u,d,optional]) => {
+          const raw = el.querySelector(`[data-k="${k}"]`).value.trim();
+          if(!raw){ if(optional) v[k] = 0; else ok = false; return; }
+          try{ v[k] = evaluate(raw); }catch(e){ ok = false; }
+        });
+        if(!ok){ out.textContent = ''; last = null; return; }
+        const r = f.c(v);
+        if(!isFinite(r)){ out.textContent = 'nicht berechenbar'; last = null; return; }
+        last = r;
+        const h = prefixHint(r);
+        out.textContent = f.o + ' = ' + fmt(r) + ' ' + f.u + (h ? '  (' + h.replace('= ','') + f.u + ')' : '');
+      };
+      el.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recalc));
+      el.querySelector('.f-take').addEventListener('click', ()=>{
+        if(last === null) return;
+        ans = last; expr = fmt(last).replace(' ×10^','E'); shownExpr = f.o + ' ='; justEval = true;
+        switchTab('calc'); show();
+      });
+      pane.appendChild(el);
+    });
+  }
+  function switchTab(t){
+    document.querySelectorAll('.calc-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+    $('calcPane').style.display = t === 'calc' ? 'flex' : 'none';
+    $('formulaPane').style.display = t === 'formulas' ? 'block' : 'none';
+  }
+  document.querySelectorAll('.calc-tab').forEach(b => b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
+  renderFormulas();
+  window.openCalc = function(){ show(); $('calcScreen').classList.add('open'); };
+  window.closeCalc = function(){ $('calcScreen').classList.remove('open'); };
+  $('calcBtn').addEventListener('click', openCalc);
+  $('learnCalcBtn').addEventListener('click', openCalc);
+  $('calcClose').addEventListener('click', closeCalc);
+})();
+
 // --- Zurück-Taste vom Handy: offenes Fenster schließen statt die App zu beenden ---
 (function(){
   // Reihenfolge = was oben liegt zuerst
   const OVERLAYS = [
     ['imgViewer',      () => document.getElementById('imgViewer').classList.remove('open')],
+    ['calcScreen',     () => closeCalc()],
     ['cropScreen',     () => closeCropScreen()],
     ['groupScreen',    () => closeGroupScreen()],
     ['catMenuOverlay', () => closeCategoryMenu()],
