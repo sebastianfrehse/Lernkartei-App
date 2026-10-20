@@ -243,7 +243,7 @@
     background:rgba(0,0,0,0.55);
     display:none;
     align-items:flex-end;
-    z-index:10;
+    z-index:14;
   }
   .sheet-overlay.open{display:flex;}
   .sheet{
@@ -365,9 +365,16 @@
     background:var(--bg);
     display:none;
     flex-direction:column;
-    z-index:5;
+    z-index:13;
   }
   #learn.open{display:flex;}
+  /* Lernen/Neue Karte nicht über Lern-Modus, Karten-Fenstern usw. anzeigen */
+  body:has(#learn.open) .fab-row,
+  body:has(.sheet-overlay.open) .fab-row,
+  body:has(#groupScreen.open) .fab-row,
+  body:has(#cropScreen.open) .fab-row{display:none;}
+  /* Platz unter der Kartenliste, damit die letzten Karten nicht unter den Knöpfen liegen */
+  #cardList{padding-bottom:140px;}
   .learn-top{
     padding:18px 20px 10px;
     display:flex;align-items:center;justify-content:space-between;
