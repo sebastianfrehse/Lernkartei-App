@@ -2716,7 +2716,7 @@ if('serviceWorker' in navigator){
     if(v === 'AC'){ expr = ''; justEval = false; }
     else if(v === 'DEL'){ expr = expr.replace(/(asin\(|acos\(|atan\(|sin\(|cos\(|tan\(|Ans|√3|√2|√\(|1\/\(|.)$/,''); justEval = false; }
     else if(v === '='){
-      try{ const before = expr; ans = evaluate(expr); shownExpr = before + ' ='; expr = fmt(ans).replace(' ×10^','E'); justEval = true; }
+      try{ const before = expr; ans = evaluate(expr); shownExpr = before + ' ='; if(window.scratchWrite) scratchWrite(before + ' = ' + fmt(ans)); expr = fmt(ans).replace(' ×10^','E'); justEval = true; }
       catch(e){ justEval = true; $('calcExpr').textContent = expr; $('calcRes').textContent = 'Fehler'; return; }
     }else{
       // nach "=" mit Rechenzeichen weiterrechnen, mit Zahl neu anfangen
@@ -2810,7 +2810,13 @@ if('serviceWorker' in navigator){
       el.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recalc));
       el.querySelector('.f-take').addEventListener('click', ()=>{
         if(last === null) return;
-        ans = last; expr = fmt(last).replace(' ×10^','E'); shownExpr = f.o.replace('_','') + ' ='; justEval = true;
+        ans = last; expr = fmt(last).replace(' ×10^','E'); shownExpr = f.o.replace('_','') + ' =';
+        if(window.scratchWrite){
+          const vals = f.i.map(([k,l]) => { const raw = el.querySelector(`[data-k="${k}"]`).value.trim(); return raw ? l.split(' (')[0].split(' ').pop() + ' = ' + raw : ''; }).filter(Boolean).join(';  ');
+          scratchWrite(f.n + ':  ' + f.f.replace(/_/g,''));
+          scratchWrite(vals);
+          scratchWrite(f.o.replace(/_/g,'') + ' = ' + fmt(last) + ' ' + f.u);
+        } justEval = true;
         switchTab('calc'); show();
       });
       pane.appendChild(el);
@@ -2849,8 +2855,32 @@ if('serviceWorker' in navigator){
     if(old.width && old.height) ctx.drawImage(old, 0, 0);
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
-  window.clearScratch = function(){ ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.restore(); };
-  window.openScratch = function(){ panel.classList.add('open'); document.getElementById('scratchBtn').classList.add('active'); requestAnimationFrame(resize); };
+  // Zeilen aus dem Rechner, die aufs Blatt geschrieben werden
+  let textY = 0, pending = [];
+  const LINE_H = 26;
+  function drawLine(t){
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.width / dpr - 24;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#1b3a8a';
+    ctx.font = '17px "Segoe Print", "Comic Sans MS", "Chalkboard SE", cursive';
+    // lange Zeilen umbrechen
+    const words = t.split(' '); let line = '';
+    const out = [];
+    words.forEach(wd => { const test = line ? line + ' ' + wd : wd; if(ctx.measureText(test).width > w && line){ out.push(line); line = wd; } else line = test; });
+    if(line) out.push(line);
+    out.forEach(l => { textY += LINE_H; ctx.fillText(l, 12, textY); });
+    ctx.restore();
+  }
+  function flush(){ if(!cv.width || !panel.classList.contains('open')) return; const list = pending; pending = []; list.forEach(drawLine); }
+  window.scratchWrite = function(t){
+    if(!document.getElementById('learn').classList.contains('open')) return; // nur beim Lernen
+    pending.push(t);
+    if(!panel.classList.contains('open')) openScratch(); else flush();
+  };
+  window.clearScratch = function(){ ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.restore(); textY = 0; pending = []; };
+  window.openScratch = function(){ panel.classList.add('open'); document.getElementById('scratchBtn').classList.add('active'); requestAnimationFrame(()=>{ resize(); flush(); }); };
   window.closeScratch = function(){ panel.classList.remove('open'); document.getElementById('scratchBtn').classList.remove('active'); };
   function setTool(er){
     erasing = er;
