@@ -524,7 +524,18 @@
   .f-out{font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--copper);margin:6px 0 8px;min-height:24px;}
   .f-formula sub, .f-out sub, .f-row label sub, .f-name sub{font-size:.72em;vertical-align:-0.25em;line-height:0;}
   .f-group{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 2px 8px;}
-  .learn-calc{background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:5px 10px;font-size:16px;}
+  .learn-body > *{flex-shrink:0;}
+  #scratchPanel{flex:0 0 50%;display:none;flex-direction:column;border-top:3px solid var(--copper);background:#fbfaf5;}
+  #scratchPanel.open{display:flex;}
+  .scratch-bar{display:flex;gap:6px;padding:6px 8px;background:var(--surface);}
+  .scratch-bar button{flex:1;white-space:nowrap;background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 2px;font-size:12.5px;}
+  .scratch-bar button.active{background:var(--copper);color:#1b1d1f;font-weight:600;}
+  #scratchCanvas{flex:1;min-height:0;width:100%;touch-action:none;display:block;
+    background-color:#fbfaf5;
+    background-image:linear-gradient(#dfe6ee 1px,transparent 1px),linear-gradient(90deg,#dfe6ee 1px,transparent 1px);
+    background-size:20px 20px;}
+  .learn-calc{background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13.5px;}
+  .learn-calc.active{background:var(--copper);color:#1b1d1f;border-color:var(--copper);font-weight:600;}
 </style>
 </head>
 <body>
@@ -750,10 +761,23 @@
   <div id="learn">
     <div class="learn-top">
       <button class="learn-close" id="learnClose">✕ Schließen</button>
-      <button class="learn-calc" id="learnCalcBtn" type="button">🧮 Rechner</button>
+      <div style="display:flex;gap:6px;">
+        <button class="learn-calc" id="scratchBtn" type="button">✏️ Nebenrechnung</button>
+        <button class="learn-calc" id="learnCalcBtn" type="button">🧮</button>
+      </div>
       <span class="learn-count" id="learnCount"></span>
     </div>
     <div class="learn-body" id="learnBody"></div>
+    <div id="scratchPanel">
+      <div class="scratch-bar">
+        <button type="button" id="scratchPen" class="active">✏️ Stift</button>
+        <button type="button" id="scratchEraser">🧽 Radierer</button>
+        <button type="button" id="scratchClear">🗑️ Leeren</button>
+        <button type="button" id="scratchCalc">🧮</button>
+        <button type="button" id="scratchClose">✕</button>
+      </div>
+      <canvas id="scratchCanvas"></canvas>
+    </div>
   </div>
 
   <!-- Elektro-Rechner -->
@@ -2083,6 +2107,7 @@ ${greenCardsInView().length > 0 ? '<button class="btn-secondary" id="learnResetG
   }
 
   const card = learnQueue[learnIndex];
+  if(window.clearScratch) clearScratch();
   countEl.textContent = (learnIndex+1) + ' / ' + learnQueue.length;
   answered = false;
   const order = shuffledOptions(card);
@@ -2142,6 +2167,7 @@ async function selectOption(card, chosenIndex){
 }
 
 function closeLearning(){
+  if(window.closeScratch) closeScratch();
   document.getElementById('learn').classList.remove('open');
   render();
 }
@@ -2731,7 +2757,8 @@ if('serviceWorker' in navigator){
     ['Motor / Drehstrom'],
     {n:'Motorstrom aus dem Netz', f:'I = P / (√3 · U · cos φ · η)', o:'I', u:'A', i:[['P','Leistung P (Schild)','W'],['U','Spannung U','V','400'],['c','cos φ',''],['e','η (z.B. 0,85)','']], c:v=>v.P/(Math.sqrt(3)*v.U*v.c*v.e)},
     {n:'Strom Wechselstrom-Verbraucher', f:'I = P / (U · cos φ)', o:'I', u:'A', i:[['P','Leistung P','W'],['U','Spannung U','V','230'],['c','cos φ','','1']], c:v=>v.P/(v.U*v.c)},
-    {n:'Synchrondrehzahl', f:'n = f · 60 / p', o:'n', u:'1/min', i:[['f','Frequenz f','Hz','50'],['p','Polpaare p','']], c:v=>v.f*60/v.p},
+    {n:'Synchrondrehzahl', f:'n_s = f · 60 / p', o:'n_s', u:'1/min', i:[['f','Frequenz f','Hz','50'],['p','Polpaare p (Pole ÷ 2)','']], c:v=>v.f*60/v.p},
+    {n:'Läuferdrehzahl aus Schlupf', f:'n = f · 60 / p · (1 − s / 100 %)', o:'n', u:'1/min', i:[['f','Frequenz f','Hz','50'],['p','Polpaare p (Pole ÷ 2)',''],['s','Schlupf s','%']], c:v=>v.f*60/v.p*(1-v.s/100)},
     {n:'Schlupf', f:'s = (n_s − n) / n_s · 100', o:'s', u:'%', i:[['a','Synchrondrehzahl n_s','1/min'],['b','Läuferdrehzahl n','1/min']], c:v=>(v.a-v.b)/v.a*100},
     {n:'Spannungsfall Wechselstrom', f:'ΔU = 2 · l · I · cos φ / (κ · A)', o:'ΔU', u:'V', i:[['l','Länge l','m'],['I','Strom I','A'],['c','cos φ','','1'],['k','κ','m/Ωmm²','56'],['A','Querschnitt A','mm²']], c:v=>2*v.l*v.I*v.c/(v.k*v.A)},
     {n:'Spannungsfall Drehstrom', f:'ΔU = √3 · l · I · cos φ / (κ · A)', o:'ΔU', u:'V', i:[['l','Länge l','m'],['I','Strom I','A'],['c','cos φ','','1'],['k','κ','m/Ωmm²','56'],['A','Querschnitt A','mm²']], c:v=>Math.sqrt(3)*v.l*v.I*v.c/(v.k*v.A)},
@@ -2803,6 +2830,59 @@ if('serviceWorker' in navigator){
   $('calcClose').addEventListener('click', closeCalc);
 })();
 
+// --- Nebenrechnung (Kästchenblatt zum Mitschreiben im Lernmodus) ---
+(function(){
+  const panel = document.getElementById('scratchPanel');
+  const cv = document.getElementById('scratchCanvas');
+  const ctx = cv.getContext('2d');
+  let erasing = false, drawing = false, last = null;
+  function resize(){
+    const r = cv.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    if(!r.width || !r.height) return;
+    const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    if(w === cv.width && h === cv.height) return;
+    const old = document.createElement('canvas'); old.width = cv.width; old.height = cv.height;
+    if(cv.width && cv.height) old.getContext('2d').drawImage(cv, 0, 0);
+    cv.width = w; cv.height = h;
+    ctx.setTransform(1,0,0,1,0,0);
+    if(old.width && old.height) ctx.drawImage(old, 0, 0);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.clearScratch = function(){ ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.restore(); };
+  window.openScratch = function(){ panel.classList.add('open'); document.getElementById('scratchBtn').classList.add('active'); requestAnimationFrame(resize); };
+  window.closeScratch = function(){ panel.classList.remove('open'); document.getElementById('scratchBtn').classList.remove('active'); };
+  function setTool(er){
+    erasing = er;
+    document.getElementById('scratchPen').classList.toggle('active', !er);
+    document.getElementById('scratchEraser').classList.toggle('active', er);
+  }
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId); drawing = true; last = pos(e);
+    ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+    ctx.fillStyle = '#1b3a8a';
+    ctx.beginPath(); ctx.arc(last.x, last.y, erasing ? 11 : 1.3, 0, Math.PI*2); ctx.fill();
+  });
+  cv.addEventListener('pointermove', e => {
+    if(!drawing) return;
+    const p = pos(e);
+    ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = '#1b3a8a'; ctx.lineWidth = erasing ? 22 : 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    last = p;
+  });
+  const end = () => { drawing = false; last = null; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  window.addEventListener('resize', () => { if(panel.classList.contains('open')) resize(); });
+  document.getElementById('scratchBtn').addEventListener('click', () => panel.classList.contains('open') ? closeScratch() : openScratch());
+  document.getElementById('scratchClose').addEventListener('click', closeScratch);
+  document.getElementById('scratchPen').addEventListener('click', () => setTool(false));
+  document.getElementById('scratchEraser').addEventListener('click', () => setTool(true));
+  document.getElementById('scratchClear').addEventListener('click', clearScratch);
+  document.getElementById('scratchCalc').addEventListener('click', () => openCalc());
+})();
+
 // --- Zurück-Taste vom Handy: offenes Fenster schließen statt die App zu beenden ---
 (function(){
   // Reihenfolge = was oben liegt zuerst
@@ -2815,6 +2895,7 @@ if('serviceWorker' in navigator){
     ['importOverlay',  () => closeImport()],
     ['categoryOverlay',() => closeCategoryOverlay()],
     ['sheetOverlay',   () => closeSheet()],
+    ['scratchPanel',   () => closeScratch()],
     ['learn',          () => closeLearning()]
   ];
   const isOpen = id => { const el = document.getElementById(id); return el && el.classList.contains('open'); };
