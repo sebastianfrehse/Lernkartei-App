@@ -959,6 +959,60 @@ async function deleteSharedCategory(code, shareId){
     return false;
   }
 }
+async function updateSharedCategory(code, shareId, payload){
+  try{
+    await db.collection('groups').doc(code).collection('shared').doc(shareId).set(payload, { merge: true });
+    return true;
+  }catch(e){
+    console.error('Geteilte Rubrik konnte nicht aktualisiert werden', e);
+    return false;
+  }
+}
+const normQ = q => (q || '').replace(/\s+/g, ' ').trim().toLowerCase();
+// Karten einer eigenen Rubrik so zusammenpacken, wie sie in der Gruppe gespeichert werden
+function buildShareCards(cat){
+  const list = cards.filter(c => c.categoryId === cat.id).map(c => {
+    const o = { question: c.question, options: c.options, correctIndex: c.correctIndex };
+    if(c.image) o.image = c.image;
+    return o;
+  });
+  let droppedPhotos = 0;
+  // Firestore erlaubt max. ~1 MB pro Eintrag: notfalls eigene Fotos weglassen (Bild-Links bleiben)
+  if(JSON.stringify(list).length > 900000){
+    list.forEach(c => { if(c.image && c.image.startsWith('data:')){ delete c.image; droppedPhotos++; } });
+  }
+  return { list, droppedPhotos };
+}
+function isMyShare(sh){ return displayName && sh.sharedBy && sh.sharedBy.toLowerCase() === displayName.toLowerCase(); }
+function shareDiffers(sh, cat){
+  const mine = cards.filter(c => c.categoryId === cat.id);
+  const theirs = sh.cards || [];
+  if(mine.length !== theirs.length) return true;
+  const set = new Map(theirs.map(c => [normQ(c.question), c]));
+  return mine.some(c => { const t = set.get(normQ(c.question)); return !t || t.correctIndex !== c.correctIndex || (t.image || '') !== (c.image || '') || JSON.stringify(t.options) !== JSON.stringify(c.options); });
+}
+// Eigene geteilte Rubriken automatisch auf den neuesten Stand bringen
+async function syncMyShares(onlyCode){
+  if(!displayName || typeof db === 'undefined') return 0;
+  let updated = 0;
+  for(const g of myGroups){
+    if(onlyCode && g.code !== onlyCode) continue;
+    const shared = await getSharedCategories(g.code);
+    for(const sh of shared){
+      if(!isMyShare(sh)) continue;
+      const cat = categories.find(c => c.name.toLowerCase() === (sh.name || '').toLowerCase());
+      if(!cat || !shareDiffers(sh, cat)) continue;
+      const { list } = buildShareCards(cat);
+      if(await updateSharedCategory(g.code, sh.id, { cards: list, updatedAt: Date.now() })){ sh.cards = list; updated++; }
+    }
+  }
+  return updated;
+}
+let syncSharesTimer = null;
+function scheduleShareSync(){
+  clearTimeout(syncSharesTimer);
+  syncSharesTimer = setTimeout(() => { syncMyShares().catch(()=>{}); }, 4000);
+}
 
 // --- Geräteeigene Speicherung (ersetzt die Claude-spezifische window.storage) ---
 // localStorage funktioniert in jeder normalen Android-WebView, auch nach dem
@@ -1038,7 +1092,9 @@ async function loadCards(){
 }
 
 async function saveCards(){
-  return localSet(STORAGE_KEY, JSON.stringify(cards));
+  const ok = localSet(STORAGE_KEY, JSON.stringify(cards));
+  if(myGroups && myGroups.length) scheduleShareSync();
+  return ok;
 }
 
 // Bildpfade wie "bilder/xyz.jpg" relativ zur App-Adresse, Links und eigene Fotos (data:) unverändert
@@ -2459,6 +2515,7 @@ async function openGroupDetail(code){
   body.innerHTML = '<p class="crop-hint">Lade Fortschritt …</p>';
 
   await publishMyProgress(code);
+  try{ await syncMyShares(code); }catch(e){}
 
   const meta = await getGroupMeta(code);
   const members = await getGroupMembers(code);
@@ -2506,15 +2563,25 @@ async function openGroupDetail(code){
   }else{
     shared.forEach(s => {
       const count = (s.cards || []).length;
-      const isMine = displayName && s.sharedBy && s.sharedBy.toLowerCase() === displayName.toLowerCase();
+      const isMine = isMyShare(s);
+      const local = categories.find(c => c.name.toLowerCase() === (s.name || '').toLowerCase());
+      const localQs = new Set(cards.filter(c => local && c.categoryId === local.id).map(c => normQ(c.question)));
+      const newCount = (s.cards || []).filter(c => !localQs.has(normQ(c.question))).length;
+      const imgCount = local ? (s.cards || []).filter(c => c.image && cards.some(x => x.categoryId === local.id && normQ(x.question) === normQ(c.question) && !x.image)).length : 0;
+      const when = s.updatedAt ? ' · aktualisiert ' + new Date(s.updatedAt).toLocaleDateString('de-DE') : '';
+      let btn;
+      if(isMine) btn = `<span class="group-item-code" style="color:var(--green);">✓ deine</span>`;
+      else if(!local) btn = `<button class="btn-secondary" style="padding:8px 12px;font-size:13px;" data-import="${s.id}">Hinzufügen</button>`;
+      else if(newCount > 0 || imgCount > 0) btn = `<button class="btn-primary" style="padding:8px 12px;font-size:13px;flex:none;" data-import="${s.id}">⟳ Aktualisieren (${newCount + imgCount} neu)</button>`;
+      else btn = `<span class="group-item-code" style="color:var(--green);">✓ aktuell</span>`;
       html += `
         <div class="group-item">
           <div>
             <div class="group-item-name">${escapeHtml(s.name)}</div>
-            <div class="group-item-code">${count} Karte(n) · von ${escapeHtml(s.sharedBy || 'unbekannt')}</div>
+            <div class="group-item-code">${count} Karte(n) · von ${escapeHtml(s.sharedBy || 'unbekannt')}${when}</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-            <button class="btn-secondary" style="padding:8px 12px;font-size:13px;" data-import="${s.id}">Hinzufügen</button>
+            ${btn}
             ${isMine ? `<button class="danger-link" style="margin:0;padding:0 4px;font-size:12px;" data-unshare="${s.id}">Entfernen</button>` : ''}
           </div>
         </div>
@@ -2543,7 +2610,7 @@ async function openGroupDetail(code){
   document.getElementById('shareCategoryBtn').addEventListener('click', () => renderShareCategoryForm(code));
 
   document.querySelectorAll('[data-import]').forEach(btn => {
-    btn.addEventListener('click', () => importSharedCategory(code, shared.find(s => s.id === btn.dataset.import)));
+    btn.addEventListener('click', async () => { await importSharedCategory(code, shared.find(s => s.id === btn.dataset.import)); await openGroupDetail(code); });
   });
   document.querySelectorAll('[data-unshare]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -2599,25 +2666,13 @@ function renderShareCategoryForm(code){
       if(!cat) return;
       const statusEl = document.getElementById('shareStatus');
       statusEl.textContent = 'Wird geteilt …';
-      const payload = {
-        name: cat.name,
-        sharedBy: displayName || 'unbekannt',
-        createdAt: Date.now(),
-        cards: cards
-          .filter(c => c.categoryId === cat.id)
-          .map(c => {
-            const o = { question: c.question, options: c.options, correctIndex: c.correctIndex };
-            if(c.image) o.image = c.image;
-            return o;
-          })
-      };
-      // Firestore erlaubt max. ~1 MB pro Eintrag: notfalls eigene Fotos weglassen (Bild-Links bleiben)
-      let droppedPhotos = 0;
-      if(JSON.stringify(payload).length > 900000){
-        payload.cards.forEach(c => { if(c.image && c.image.startsWith('data:')){ delete c.image; droppedPhotos++; } });
-      }
+      const { list, droppedPhotos } = buildShareCards(cat);
       if(droppedPhotos) alert('Hinweis: ' + droppedPhotos + ' eigene Fotos sind zu groß zum Teilen und werden ohne Bild geteilt.');
-      const ok = await shareCategoryToGroup(code, payload);
+      // Schon mal geteilt? Dann den vorhandenen Eintrag aktualisieren statt doppelt anzulegen
+      const existing = (await getSharedCategories(code)).find(sh => isMyShare(sh) && (sh.name || '').toLowerCase() === cat.name.toLowerCase());
+      const ok = existing
+        ? await updateSharedCategory(code, existing.id, { cards: list, updatedAt: Date.now() })
+        : await shareCategoryToGroup(code, { name: cat.name, sharedBy: displayName || 'unbekannt', createdAt: Date.now(), updatedAt: Date.now(), cards: list });
       if(ok){
         await openGroupDetail(code);
       }else{
@@ -2648,7 +2703,11 @@ async function importSharedCategory(code, share){
       existing.categoryId === target.id &&
       existing.question.replace(/\s+/g, ' ').trim().toLowerCase() === normalized
     );
-    if(exists){ skipped++; return; }
+    if(exists){
+      const ex = cards.find(e => e.categoryId === target.id && normQ(e.question) === normalized);
+      if(ex && c.image && !ex.image){ ex.image = c.image; added++; } else skipped++;
+      return;
+    }
     cards.push({
       id: Date.now().toString(36) + '-' + i,
       question: c.question,
