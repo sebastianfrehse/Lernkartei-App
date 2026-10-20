@@ -522,6 +522,7 @@
   .f-row input{flex:1;}
   .f-unit{width:40px;font-size:13px;color:var(--muted);}
   .f-out{font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--copper);margin:6px 0 8px;min-height:24px;}
+  .f-formula sub, .f-out sub, .f-row label sub, .f-name sub{font-size:.72em;vertical-align:-0.25em;line-height:0;}
   .f-group{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 2px 8px;}
   .learn-calc{background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:5px 10px;font-size:16px;}
 </style>
@@ -2743,6 +2744,12 @@ if('serviceWorker' in navigator){
     {n:'Scheinwiderstand', f:'Z = √(R² + X²)', o:'Z', u:'Ω', i:[['R','Wirkwiderstand R','Ω'],['X','Blindwiderstand X','Ω']], c:v=>Math.sqrt(v.R*v.R+v.X*v.X)},
     {n:'Trafo Übersetzung', f:'U2 = U1 · N2 / N1', o:'U2', u:'V', i:[['U','Primärspannung U1','V'],['a','Windungen N1',''],['b','Windungen N2','']], c:v=>v.U*v.b/v.a}
   ];
+  // Formelzeichen wie im Tabellenbuch: X_C → X mit tiefgestelltem C, R1 → R mit tiefgestellter 1
+  function fz(str){
+    return escapeHtml(str)
+      .replace(/([A-Za-zηφκû])_([A-Za-z0-9]+)/g, '$1<sub>$2</sub>')
+      .replace(/(^|[^A-Za-z])([A-Z])(\d)(?!\d)/g, '$1$2<sub>$3</sub>');
+  }
   function renderFormulas(){
     const pane = $('formulaPane');
     pane.innerHTML = '<p class="crop-hint" style="margin:0 2px 4px;">Formel antippen, Werte eingeben – Komma und Vorsätze wie 4,7k oder 20m gehen auch.</p>';
@@ -2750,9 +2757,9 @@ if('serviceWorker' in navigator){
       if(Array.isArray(f)){ const g = document.createElement('div'); g.className = 'f-group'; g.textContent = f[0]; pane.appendChild(g); return; }
       const el = document.createElement('div');
       el.className = 'f-item';
-      el.innerHTML = `<div class="f-head"><div><div class="f-name">${escapeHtml(f.n)}</div><div class="f-formula">${escapeHtml(f.f)}</div></div><span style="color:var(--copper);">›</span></div>
+      el.innerHTML = `<div class="f-head"><div><div class="f-name">${fz(f.n)}</div><div class="f-formula">${fz(f.f)}</div></div><span style="color:var(--copper);">›</span></div>
         <div class="f-body">
-          ${f.i.map(([k,l,u,d]) => `<div class="f-row"><label>${escapeHtml(l)}</label><input type="text" inputmode="decimal" data-k="${k}" value="${d ? d.replace('.',',') : ''}"><span class="f-unit">${escapeHtml(u)}</span></div>`).join('')}
+          ${f.i.map(([k,l,u,d]) => `<div class="f-row"><label>${fz(l)}</label><input type="text" inputmode="decimal" data-k="${k}" value="${d ? d.replace('.',',') : ''}"><span class="f-unit">${escapeHtml(u)}</span></div>`).join('')}
           <div class="f-out"></div>
           <button class="btn-secondary f-take" type="button" style="width:100%;padding:10px;">Ergebnis in Taschenrechner übernehmen</button>
         </div>`;
@@ -2771,12 +2778,12 @@ if('serviceWorker' in navigator){
         if(!isFinite(r)){ out.textContent = 'nicht berechenbar'; last = null; return; }
         last = r;
         const h = prefixHint(r);
-        out.textContent = f.o + ' = ' + fmt(r) + ' ' + f.u + (h ? '  (' + h.replace('= ','') + f.u + ')' : '');
+        out.innerHTML = fz(f.o) + ' = ' + escapeHtml(fmt(r) + ' ' + f.u + (h ? '  (' + h.replace('= ','') + f.u + ')' : ''));
       };
       el.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recalc));
       el.querySelector('.f-take').addEventListener('click', ()=>{
         if(last === null) return;
-        ans = last; expr = fmt(last).replace(' ×10^','E'); shownExpr = f.o + ' ='; justEval = true;
+        ans = last; expr = fmt(last).replace(' ×10^','E'); shownExpr = f.o.replace('_','') + ' ='; justEval = true;
         switchTab('calc'); show();
       });
       pane.appendChild(el);
