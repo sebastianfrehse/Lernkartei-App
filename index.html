@@ -390,6 +390,18 @@
     margin-bottom:16px;
   }
   .learn-q{font-size:17px;line-height:1.5;font-weight:500;}
+  .learn-card.has-img{flex-direction:column;padding:12px 12px 20px;}
+  .learn-img{display:block;width:100%;max-height:45vh;object-fit:contain;background:#fff;border-radius:10px;margin-bottom:14px;cursor:zoom-in;}
+  .learn-img-hint{font-size:11.5px;color:var(--muted);margin:-8px 0 10px;}
+  .card-img-tag{font-size:12px;margin-right:6px;}
+  .img-preview{display:block;width:100%;max-height:220px;object-fit:contain;background:#fff;border-radius:10px;margin:8px 0;}
+  #imgViewer{position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;z-index:30;overflow:auto;}
+  #imgViewer.open{display:flex;align-items:center;}
+  #imgViewer.open.zoomed{display:block;}
+  #imgViewer img{display:block;width:100%;height:auto;background:#fff;margin:auto;}
+  #imgViewer.zoomed img{width:250%;max-width:none;}
+  #imgViewerClose{position:fixed;top:12px;right:12px;z-index:31;background:rgba(0,0,0,0.6);color:#fff;border-radius:20px;padding:8px 14px;font-size:14px;}
+  .img-viewer-hint{position:fixed;bottom:14px;left:0;right:0;text-align:center;color:#ccc;font-size:12px;pointer-events:none;}
   .learn-options{display:flex;flex-direction:column;gap:10px;}
   .learn-option{
     text-align:left;
@@ -506,6 +518,15 @@
       <textarea id="qInput" placeholder="z.B. Wie berechnet man den Widerstand nach dem Ohmschen Gesetz?"></textarea>
       <div class="form-warning" id="duplicateWarning"></div>
 
+      <label class="field-label">Bild zur Frage (optional)</label>
+      <img id="sheetImgPreview" class="img-preview" alt="Bild zur Frage" style="display:none;">
+      <label class="ocr-btn" for="imgCameraInput">📷 Bild für die Frage aufnehmen</label>
+      <input type="file" accept="image/*" capture="environment" id="imgCameraInput" style="position:absolute;width:1px;height:1px;opacity:0;">
+      <label class="ocr-btn" for="imgGalleryInput" style="margin-top:8px;">🖼️ Bild für die Frage aus Galerie</label>
+      <input type="file" accept="image/*" id="imgGalleryInput" style="position:absolute;width:1px;height:1px;opacity:0;">
+      <button class="danger-link" id="sheetImgRemove" type="button" style="display:none;">Bild entfernen</button>
+      <div class="ocr-status" id="imgStatus"></div>
+
       <label class="ocr-btn" for="cameraInput">📷 Frage & Antworten aus Foto einlesen</label>
       <input type="file" accept="image/*" capture="environment" id="cameraInput" style="position:absolute;width:1px;height:1px;opacity:0;">
       <label class="ocr-btn" for="galleryInput" style="margin-top:8px;">🖼️ Bild aus Galerie wählen</label>
@@ -550,7 +571,7 @@
 <input type="text" id="importNewCategoryInput" placeholder="Name der neuen Rubrik" style="display:none;margin-top:8px;">
 <label class="field-label">Text mit Fragen</label>
 <textarea id="importText" placeholder="Was ist das oberste Ziel einer Unternehmung?&#10;*1) Erwirtschaften von Gewinn&#10;2) ...&#10;3) ...&#10;4) ...&#10;5) ..."></textarea>
-<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen.</div>
+<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen. Optional über der Frage eine Zeile <b>Bild: …</b> mit dem Bildnamen oder Link, dann wird das Bild zur Frage angezeigt.</div>
 <div class="form-error" id="importError"></div>
 <div class="sheet-actions">
 <button class="btn-secondary" id="importCancelBtn">Abbrechen</button>
@@ -592,14 +613,21 @@
     <div class="learn-body" id="learnBody"></div>
   </div>
 
+  <!-- Bild groß ansehen -->
+  <div id="imgViewer">
+    <button id="imgViewerClose" type="button">✕ Schließen</button>
+    <img id="imgViewerImg" alt="Bild">
+    <div class="img-viewer-hint">Antippen zum Vergrößern / Verkleinern</div>
+  </div>
+
   <!-- Zuschneiden vor der Texterkennung -->
   <div id="cropScreen">
     <div class="learn-top">
       <button class="learn-close" id="cropCancel">✕ Abbrechen</button>
-      <span class="learn-count">Frage markieren</span>
+      <span class="learn-count" id="cropTitle">Frage markieren</span>
     </div>
     <div class="crop-body">
-      <p class="crop-hint">Mit <b>einem Finger</b> ziehst du das Rechteck um Frage + 5 Antworten. Mit <b>zwei Fingern</b> verschiebst du das gezoomte Bild.</p>
+      <p class="crop-hint"><span id="cropHintWhat">Mit <b>einem Finger</b> ziehst du das Rechteck um Frage + 5 Antworten.</span> Mit <b>zwei Fingern</b> verschiebst du das gezoomte Bild.</p>
       <div class="zoom-controls">
         <button class="zoom-btn" id="zoomOut" type="button">−</button>
         <span class="zoom-label" id="zoomLabel">100%</span>
@@ -778,7 +806,14 @@ async function loadCards(){
 }
 
 async function saveCards(){
-  localSet(STORAGE_KEY, JSON.stringify(cards));
+  return localSet(STORAGE_KEY, JSON.stringify(cards));
+}
+
+// Bildpfade wie "bilder/xyz.jpg" relativ zur App-Adresse, Links und eigene Fotos (data:) unverändert
+function imageSrc(img){
+  if(!img) return '';
+  if(/^(data:|https?:)/i.test(img)) return img;
+  return img.replace(/^\/+/, '');
 }
 
 async function saveCategories(){
@@ -919,7 +954,7 @@ function render(){
     const el = document.createElement('div');
     el.className = 'card status-' + status;
     el.innerHTML = `
-      <div class="card-q">${escapeHtml(card.question)}</div>
+      <div class="card-q">${card.image ? '<span class="card-img-tag">🖼️</span>' : ''}${escapeHtml(card.question)}</div>
       <div class="leds">
         ${[0,1,2].map(i => `<div class="led ${i < card.streak ? 'on-'+status : ''}"></div>`).join('')}
       </div>
@@ -1107,6 +1142,7 @@ function openAdd(){
   resetRawText();
   populateCategorySelect(selectedCategoryId);
   renderOptionRows(['', '', '', '', ''], null);
+  setSheetImage('');
   document.getElementById('sheetOverlay').classList.add('open');
 }
 
@@ -1125,6 +1161,7 @@ function openEdit(id){
   resetRawText();
   populateCategorySelect(card.categoryId);
   renderOptionRows(card.options, card.correctIndex);
+  setSheetImage(card.image || '');
   document.getElementById('sheetOverlay').classList.add('open');
 }
 
@@ -1194,10 +1231,16 @@ async function saveSheet(){
     card.options = options;
     card.correctIndex = correctIndex;
     card.categoryId = categoryId;
+    if(sheetImage) card.image = sheetImage; else delete card.image;
   }else{
-    cards.push({id: Date.now().toString(36), question:q, options, correctIndex, streak:0, categoryId});
+    const newCard = {id: Date.now().toString(36), question:q, options, correctIndex, streak:0, categoryId};
+    if(sheetImage) newCard.image = sheetImage;
+    cards.push(newCard);
   }
-  await saveCards();
+  if(!(await saveCards())){
+    errorEl.textContent = 'Speichern fehlgeschlagen — der Speicher ist wahrscheinlich voll (zu viele eigene Fotos). Bild entfernen oder kleineren Ausschnitt wählen.';
+    return;
+  }
   closeSheet();
   render();
 }
@@ -1277,7 +1320,10 @@ function parseImportText(text){
     const qLines = [];
     const options = [];
     let correctIndex = null;
+    let image = '';
     block.split('\n').map(l => l.trim()).filter(l => l).forEach(line => {
+      const im = line.match(/^bild\s*:\s*(\S+)\s*$/i);
+      if(im){ image = im[1]; return; }
       const m = line.match(/^(\*?)\s*([1-5])\s*[).:]\s*(\*?)\s*(.+)$/);
       if(m && qLines.length > 0){
         if(m[1] || m[3]) correctIndex = options.length;
@@ -1293,7 +1339,7 @@ function parseImportText(text){
     if(!question) problems.push(label + ': keine Frage gefunden');
     else if(options.length !== NUM_OPTIONS) problems.push(label + ': ' + options.length + ' statt 5 Antworten');
     else if(correctIndex === null) problems.push(label + ': keine richtige Antwort mit * markiert');
-    else result.push({ question, options, correctIndex });
+    else result.push({ question, options, correctIndex, image });
   });
   return { result, problems };
 }
@@ -1315,17 +1361,26 @@ async function importCards(){
   const norm = s => s.replace(/\s+/g, ' ').trim().toLowerCase();
   const existing = new Set(cards.map(c => norm(c.question)));
   let added = 0, skipped = 0;
+  let imgAdded = 0;
   result.forEach((r, i) => {
-    if(existing.has(norm(r.question))){ skipped++; return; }
+    if(existing.has(norm(r.question))){
+      // Frage gibt es schon: falls sie noch kein Bild hat, Bild nachtragen
+      const ex = cards.find(c => norm(c.question) === norm(r.question));
+      if(r.image && ex && !ex.image){ ex.image = r.image; imgAdded++; }
+      else skipped++;
+      return;
+    }
     existing.add(norm(r.question));
-    cards.push({ id: Date.now().toString(36) + '-' + i, question: r.question, options: r.options, correctIndex: r.correctIndex, streak: 0, categoryId });
+    const nc = { id: Date.now().toString(36) + '-' + i, question: r.question, options: r.options, correctIndex: r.correctIndex, streak: 0, categoryId };
+    if(r.image) nc.image = r.image;
+    cards.push(nc);
     added++;
   });
   await saveCards();
   selectedCategoryId = categoryId;
   closeImport();
   render();
-  alert(added + (added === 1 ? ' Karte' : ' Karten') + ' importiert' + (skipped ? ', ' + skipped + ' doppelte übersprungen' : '') + '.');
+  alert(added + (added === 1 ? ' Karte' : ' Karten') + ' importiert' + (imgAdded ? ', bei ' + imgAdded + ' vorhandenen Karten Bild ergänzt' : '') + (skipped ? ', ' + skipped + ' doppelte übersprungen' : '') + '.');
 }
 document.getElementById('openImportBtn').addEventListener('click', openImport);
 document.getElementById('importCancelBtn').addEventListener('click', closeImport);
@@ -1490,7 +1545,15 @@ function applyZoom(){
   document.getElementById('cropConfirm').disabled = true;
 }
 
-function openCropScreen(canvas){
+let cropMode = 'ocr'; // 'ocr' = Text einlesen, 'image' = Bild zur Frage
+function openCropScreen(canvas, mode){
+  cropMode = mode || 'ocr';
+  const isImg = cropMode === 'image';
+  document.getElementById('cropTitle').textContent = isImg ? 'Bild markieren' : 'Frage markieren';
+  document.getElementById('cropHintWhat').innerHTML = isImg
+    ? 'Mit <b>einem Finger</b> ziehst du das Rechteck um das Bild (Schaltplan, Foto, Tabelle …).'
+    : 'Mit <b>einem Finger</b> ziehst du das Rechteck um Frage + 5 Antworten.';
+  document.getElementById('cropConfirm').textContent = isImg ? 'Bild übernehmen' : 'Ausschnitt einlesen';
   sourceCanvas = canvas;
   const imgEl = document.getElementById('cropImg');
   imgEl.src = canvas.toDataURL('image/jpeg', 0.9);
@@ -1659,6 +1722,24 @@ document.getElementById('cropConfirm').addEventListener('click', async ()=>{
   cropped.height = sh;
   cropped.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
+  if(cropMode === 'image'){
+    // Bild zur Frage: verkleinern und als JPEG speichern, damit der Speicher nicht vollläuft
+    const MAX = 1000;
+    let out = cropped;
+    if(Math.max(cropped.width, cropped.height) > MAX){
+      const sc = MAX / Math.max(cropped.width, cropped.height);
+      out = document.createElement('canvas');
+      out.width = Math.round(cropped.width * sc);
+      out.height = Math.round(cropped.height * sc);
+      const octx = out.getContext('2d');
+      octx.imageSmoothingQuality = 'high';
+      octx.drawImage(cropped, 0, 0, out.width, out.height);
+    }
+    setSheetImage(out.toDataURL('image/jpeg', 0.72));
+    closeCropScreen();
+    return;
+  }
+
   // Kleine Ausschnitte hochskalieren — hilft der Texterkennung bei kleinen Ziffern/Buchstaben
   const MIN_WIDTH = 1400;
   if(cropped.width < MIN_WIDTH){
@@ -1736,6 +1817,44 @@ async function handleFileSelected(e){
 document.getElementById('cameraInput').addEventListener('change', handleFileSelected);
 document.getElementById('galleryInput').addEventListener('change', handleFileSelected);
 
+// --- Bild zur Frage ---
+let sheetImage = '';
+function setSheetImage(img){
+  sheetImage = img || '';
+  const prev = document.getElementById('sheetImgPreview');
+  if(sheetImage){ prev.src = imageSrc(sheetImage); prev.style.display = 'block'; }
+  else { prev.removeAttribute('src'); prev.style.display = 'none'; }
+  document.getElementById('sheetImgRemove').style.display = sheetImage ? 'block' : 'none';
+  document.getElementById('imgStatus').textContent = '';
+}
+async function handleImageFileSelected(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('imgStatus');
+  statusEl.textContent = 'Foto wird vorbereitet …';
+  try{
+    const canvas = await loadOrientedCanvas(file, 2200);
+    statusEl.textContent = '';
+    openCropScreen(canvas, 'image');
+  }catch(err){
+    statusEl.textContent = 'Bild konnte nicht geladen werden.';
+  }
+  e.target.value = '';
+}
+document.getElementById('imgCameraInput').addEventListener('change', handleImageFileSelected);
+document.getElementById('imgGalleryInput').addEventListener('change', handleImageFileSelected);
+document.getElementById('sheetImgRemove').addEventListener('click', ()=> setSheetImage(''));
+
+function openImgViewer(src){
+  const v = document.getElementById('imgViewer');
+  document.getElementById('imgViewerImg').src = src;
+  v.classList.remove('zoomed');
+  v.classList.add('open');
+  v.scrollTop = 0; v.scrollLeft = 0;
+}
+document.getElementById('imgViewerImg').addEventListener('click', ()=> document.getElementById('imgViewer').classList.toggle('zoomed'));
+document.getElementById('imgViewerClose').addEventListener('click', ()=> document.getElementById('imgViewer').classList.remove('open'));
+
 // --- Lern-Modus ---
 function startLearning(){
   const pool = selectedCategoryId === null
@@ -1804,11 +1923,20 @@ ${greenCardsInView().length > 0 ? '<button class="btn-secondary" id="learnResetG
   const order = shuffledOptions(card);
 
   body.innerHTML = `
-    <div class="learn-card"><div class="learn-q">${escapeHtml(card.question)}</div></div>
+    <div class="learn-card${card.image ? ' has-img' : ''}">
+      ${card.image ? `<img class="learn-img" id="learnImg" src="${escapeHtml(imageSrc(card.image))}" alt="Bild zur Frage"><div class="learn-img-hint">Bild antippen zum Vergrößern</div>` : ''}
+      <div class="learn-q">${escapeHtml(card.question)}</div>
+    </div>
     <div class="learn-options" id="learnOptions">
       ${order.map(opt => `<button class="learn-option" data-index="${opt.i}">${escapeHtml(opt.text)}</button>`).join('')}
     </div>
   `;
+
+  const learnImg = document.getElementById('learnImg');
+  if(learnImg){
+    learnImg.addEventListener('click', ()=> openImgViewer(learnImg.src));
+    learnImg.addEventListener('error', ()=>{ learnImg.nextElementSibling.textContent = 'Bild konnte nicht geladen werden (keine Internetverbindung?)'; learnImg.style.display = 'none'; });
+  }
 
   document.querySelectorAll('.learn-option').forEach(btn=>{
     btn.addEventListener('click', ()=> selectOption(card, parseInt(btn.dataset.index,10)));
@@ -2243,8 +2371,18 @@ function renderShareCategoryForm(code){
         createdAt: Date.now(),
         cards: cards
           .filter(c => c.categoryId === cat.id)
-          .map(c => ({ question: c.question, options: c.options, correctIndex: c.correctIndex }))
+          .map(c => {
+            const o = { question: c.question, options: c.options, correctIndex: c.correctIndex };
+            if(c.image) o.image = c.image;
+            return o;
+          })
       };
+      // Firestore erlaubt max. ~1 MB pro Eintrag: notfalls eigene Fotos weglassen (Bild-Links bleiben)
+      let droppedPhotos = 0;
+      if(JSON.stringify(payload).length > 900000){
+        payload.cards.forEach(c => { if(c.image && c.image.startsWith('data:')){ delete c.image; droppedPhotos++; } });
+      }
+      if(droppedPhotos) alert('Hinweis: ' + droppedPhotos + ' eigene Fotos sind zu groß zum Teilen und werden ohne Bild geteilt.');
       const ok = await shareCategoryToGroup(code, payload);
       if(ok){
         await openGroupDetail(code);
@@ -2283,7 +2421,8 @@ async function importSharedCategory(code, share){
       options: c.options,
       correctIndex: c.correctIndex,
       streak: 0,
-      categoryId: target.id
+      categoryId: target.id,
+      ...(c.image ? { image: c.image } : {})
     });
     added++;
   });
