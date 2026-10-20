@@ -528,12 +528,9 @@
   #scratchPanel{flex:0 0 50%;display:none;flex-direction:column;border-top:3px solid var(--copper);background:#fbfaf5;}
   #scratchPanel.open{display:flex;}
   .scratch-bar{display:flex;gap:6px;padding:6px 8px;background:var(--surface);}
-  .scratch-bar button{flex:1;white-space:nowrap;background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 2px;font-size:12.5px;}
+  .scratch-bar button{flex:1;white-space:nowrap;background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 2px;font-size:16px;}
   .scratch-bar button.active{background:var(--copper);color:#1b1d1f;font-weight:600;}
-  #scratchCanvas{flex:1;min-height:0;width:100%;touch-action:none;display:block;
-    background-color:#fbfaf5;
-    background-image:linear-gradient(#dfe6ee 1px,transparent 1px),linear-gradient(90deg,#dfe6ee 1px,transparent 1px);
-    background-size:20px 20px;}
+  #scratchCanvas{flex:1;min-height:0;width:100%;touch-action:none;display:block;background:#8e9296;}
   .learn-calc{background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13.5px;}
   .learn-calc.active{background:var(--copper);color:#1b1d1f;border-color:var(--copper);font-weight:600;}
 </style>
@@ -770,10 +767,12 @@
     <div class="learn-body" id="learnBody"></div>
     <div id="scratchPanel">
       <div class="scratch-bar">
-        <button type="button" id="scratchPen" class="active">✏️ Stift</button>
-        <button type="button" id="scratchEraser">🧽 Radierer</button>
-        <button type="button" id="scratchClear">🗑️ Leeren</button>
-        <button type="button" id="scratchCalc">🧮</button>
+        <button type="button" id="scratchPen" class="active" title="Stift">✏️</button>
+        <button type="button" id="scratchEraser" title="Radierer">🧽</button>
+        <button type="button" id="scratchClear" title="Leeren">🗑️</button>
+        <button type="button" id="scratchZoomOut" title="Rauszoomen">−</button>
+        <button type="button" id="scratchZoomIn" title="Reinzoomen">+</button>
+        <button type="button" id="scratchCalc" title="Rechner">🧮</button>
         <button type="button" id="scratchClose">✕</button>
       </div>
       <canvas id="scratchCanvas"></canvas>
@@ -2836,50 +2835,87 @@ if('serviceWorker' in navigator){
   $('calcClose').addEventListener('click', closeCalc);
 })();
 
-// --- Nebenrechnung (Kästchenblatt zum Mitschreiben im Lernmodus) ---
+// --- Nebenrechnung (Kästchenblatt zum Mitschreiben im Lernmodus, zoombar) ---
 (function(){
   const panel = document.getElementById('scratchPanel');
   const cv = document.getElementById('scratchCanvas');
   const ctx = cv.getContext('2d');
-  let erasing = false, drawing = false, last = null;
+  // Großes Blatt im Hintergrund, der Bildschirm zeigt einen Ausschnitt davon
+  const PW = 1000, PH = 2000, PS = 1.5;
+  const paper = document.createElement('canvas');
+  paper.width = PW * PS; paper.height = PH * PS;
+  const pctx = paper.getContext('2d');
+  pctx.scale(PS, PS);
+  let z = 1, ox = 0, oy = 0, vw = 0, vh = 0, dpr = 1;
+  let erasing = false;
+  const pointers = new Map();
+  let lastPt = null, pinch = null, rafPending = false;
+
+  function minZoom(){ return vw ? Math.min(1, vw / PW) : 0.3; }
+  function clampView(){
+    z = Math.max(minZoom(), Math.min(3, z));
+    const w = PW * z, h = PH * z;
+    ox = w <= vw ? (vw - w) / 2 : Math.min(0, Math.max(vw - w, ox));
+    oy = h <= vh ? 0 : Math.min(0, Math.max(vh - h, oy));
+  }
+  function render(){
+    rafPending = false;
+    if(!cv.width) return;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = '#8e9296'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.setTransform(dpr*z,0,0,dpr*z,dpr*ox,dpr*oy);
+    ctx.fillStyle = '#fbfaf5'; ctx.fillRect(0,0,PW,PH);
+    // Kästchen nur im sichtbaren Bereich zeichnen
+    const x0 = Math.max(0, -ox/z), y0 = Math.max(0, -oy/z), x1 = Math.min(PW, (vw-ox)/z), y1 = Math.min(PH, (vh-oy)/z);
+    ctx.strokeStyle = '#dfe6ee'; ctx.lineWidth = 1/z;
+    ctx.beginPath();
+    for(let x = Math.floor(x0/20)*20; x <= x1; x += 20){ ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
+    for(let y = Math.floor(y0/20)*20; y <= y1; y += 20){ ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
+    ctx.stroke();
+    ctx.drawImage(paper, 0, 0, PW, PH);
+  }
+  const requestRender = () => { if(!rafPending){ rafPending = true; requestAnimationFrame(render); } };
   function resize(){
     const r = cv.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
     if(!r.width || !r.height) return;
-    const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
-    if(w === cv.width && h === cv.height) return;
-    const old = document.createElement('canvas'); old.width = cv.width; old.height = cv.height;
-    if(cv.width && cv.height) old.getContext('2d').drawImage(cv, 0, 0);
-    cv.width = w; cv.height = h;
-    ctx.setTransform(1,0,0,1,0,0);
-    if(old.width && old.height) ctx.drawImage(old, 0, 0);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
+    dpr = window.devicePixelRatio || 1;
+    vw = r.width; vh = r.height;
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+    clampView(); render();
   }
+  function setZoom(nz, cx, cy){
+    const old = z;
+    z = Math.max(minZoom(), Math.min(3, nz));
+    ox = cx - (cx - ox) * (z / old);
+    oy = cy - (cy - oy) * (z / old);
+    clampView(); requestRender();
+  }
+
   // Zeilen aus dem Rechner, die aufs Blatt geschrieben werden
   let textY = 0, pending = [];
   const LINE_H = 26;
   function drawLine(t){
-    const dpr = window.devicePixelRatio || 1;
-    const w = cv.width / dpr - 24;
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = '#1b3a8a';
-    ctx.font = '17px "Segoe Print", "Comic Sans MS", "Chalkboard SE", cursive';
-    // lange Zeilen umbrechen
-    const words = t.split(' '); let line = '';
-    const out = [];
-    words.forEach(wd => { const test = line ? line + ' ' + wd : wd; if(ctx.measureText(test).width > w && line){ out.push(line); line = wd; } else line = test; });
+    pctx.save();
+    pctx.globalCompositeOperation = 'source-over';
+    pctx.fillStyle = '#1b3a8a';
+    pctx.font = '17px "Segoe Print", "Comic Sans MS", "Chalkboard SE", cursive';
+    const maxW = Math.min(PW, vw / z || PW) - 24;
+    const words = t.split(' '); let line = ''; const out = [];
+    words.forEach(wd => { const test = line ? line + ' ' + wd : wd; if(pctx.measureText(test).width > maxW && line){ out.push(line); line = wd; } else line = test; });
     if(line) out.push(line);
-    out.forEach(l => { textY += LINE_H; ctx.fillText(l, 12, textY); });
-    ctx.restore();
+    out.forEach(l => { textY += LINE_H; pctx.fillText(l, 12 - ox/z, textY); });
+    pctx.restore();
   }
-  function flush(){ if(!cv.width || !panel.classList.contains('open')) return; const list = pending; pending = []; list.forEach(drawLine); }
+  function flush(){ if(!vw || !panel.classList.contains('open')) return; const list = pending; pending = []; list.forEach(drawLine); requestRender(); }
   window.scratchWrite = function(t){
     if(!document.getElementById('learn').classList.contains('open')) return; // nur beim Lernen
     pending.push(t);
     if(!panel.classList.contains('open')) openScratch(); else flush();
   };
-  window.clearScratch = function(){ ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.restore(); textY = 0; pending = []; };
+  window.clearScratch = function(){
+    pctx.save(); pctx.setTransform(1,0,0,1,0,0); pctx.clearRect(0,0,paper.width,paper.height); pctx.restore();
+    textY = 0; pending = []; ox = 0; oy = 0; clampView(); requestRender();
+  };
   window.openScratch = function(){ panel.classList.add('open'); document.getElementById('scratchBtn').classList.add('active'); requestAnimationFrame(()=>{ resize(); flush(); }); };
   window.closeScratch = function(){ panel.classList.remove('open'); document.getElementById('scratchBtn').classList.remove('active'); };
   function setTool(er){
@@ -2887,22 +2923,42 @@ if('serviceWorker' in navigator){
     document.getElementById('scratchPen').classList.toggle('active', !er);
     document.getElementById('scratchEraser').classList.toggle('active', er);
   }
-  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const screenPos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const toPaper = p => ({ x: (p.x - ox) / z, y: (p.y - oy) / z });
+  function stroke(a, b){
+    pctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+    pctx.strokeStyle = '#1b3a8a'; pctx.fillStyle = '#1b3a8a';
+    pctx.lineWidth = erasing ? 22 : 2.6; pctx.lineCap = 'round'; pctx.lineJoin = 'round';
+    if(!b){ pctx.beginPath(); pctx.arc(a.x, a.y, erasing ? 11 : 1.3, 0, Math.PI*2); pctx.fill(); return; }
+    pctx.beginPath(); pctx.moveTo(a.x, a.y); pctx.lineTo(b.x, b.y); pctx.stroke();
+  }
+  function pinchInfo(){
+    const pts = [...pointers.values()];
+    return { d: Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y), m: { x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2 } };
+  }
   cv.addEventListener('pointerdown', e => {
-    cv.setPointerCapture(e.pointerId); drawing = true; last = pos(e);
-    ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
-    ctx.fillStyle = '#1b3a8a';
-    ctx.beginPath(); ctx.arc(last.x, last.y, erasing ? 11 : 1.3, 0, Math.PI*2); ctx.fill();
+    cv.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, screenPos(e));
+    if(pointers.size === 1){ lastPt = toPaper(screenPos(e)); stroke(lastPt); requestRender(); }
+    else { lastPt = null; pinch = pinchInfo(); }
   });
   cv.addEventListener('pointermove', e => {
-    if(!drawing) return;
-    const p = pos(e);
-    ctx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
-    ctx.strokeStyle = '#1b3a8a'; ctx.lineWidth = erasing ? 22 : 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
-    last = p;
+    if(!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, screenPos(e));
+    if(pointers.size >= 2){
+      // Zwei Finger: zoomen und verschieben
+      const now = pinchInfo();
+      if(pinch && pinch.d > 0){
+        ox += now.m.x - pinch.m.x; oy += now.m.y - pinch.m.y;
+        setZoom(z * now.d / pinch.d, now.m.x, now.m.y);
+      }
+      pinch = now; return;
+    }
+    if(!lastPt) return;
+    const p = toPaper(screenPos(e));
+    stroke(lastPt, p); lastPt = p; requestRender();
   });
-  const end = () => { drawing = false; last = null; };
+  const end = e => { pointers.delete(e.pointerId); if(pointers.size < 2) pinch = null; if(pointers.size === 0) lastPt = null; };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
   window.addEventListener('resize', () => { if(panel.classList.contains('open')) resize(); });
   document.getElementById('scratchBtn').addEventListener('click', () => panel.classList.contains('open') ? closeScratch() : openScratch());
@@ -2910,6 +2966,8 @@ if('serviceWorker' in navigator){
   document.getElementById('scratchPen').addEventListener('click', () => setTool(false));
   document.getElementById('scratchEraser').addEventListener('click', () => setTool(true));
   document.getElementById('scratchClear').addEventListener('click', clearScratch);
+  document.getElementById('scratchZoomOut').addEventListener('click', () => setZoom(z / 1.4, vw/2, 0));
+  document.getElementById('scratchZoomIn').addEventListener('click', () => setZoom(z * 1.4, vw/2, 0));
   document.getElementById('scratchCalc').addEventListener('click', () => openCalc());
 })();
 
