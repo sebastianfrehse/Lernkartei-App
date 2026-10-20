@@ -546,6 +546,15 @@
   .frac > span{line-height:1.35;padding:0 3px;white-space:nowrap;}
   .frac > span:first-child{border-bottom:1.5px solid currentColor;}
   .f-formula{line-height:1.6;}
+  #fKeypad{display:none;grid-template-columns:repeat(5,1fr);gap:5px;padding:6px 10px 8px;background:var(--surface);border-top:1px solid var(--line);}
+  #fKeypad.open{display:grid;}
+  #fKeypad button{background:#3a3f43;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 0;font-size:17px;}
+  #fKeypad button.kp-pre{color:#8fc1e3;background:var(--surface2);}
+  #fKeypad button.kp-del{color:var(--red);background:var(--surface2);}
+  #fKeypad button.kp-ok{background:var(--copper);color:#1b1d1f;font-weight:700;}
+  #fKeypad button:active{filter:brightness(1.4);}
+  #calcScreen.docked #fKeypad button{padding:6px 0;font-size:15px;}
+  input.kp-active{outline:2px solid var(--copper);outline-offset:1px;}
   .f-group{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 2px 8px;}
   .learn-body > *{flex-shrink:0;}
   #scratchPanel{flex:0 0 50%;display:none;flex-direction:column;border-top:3px solid var(--copper);background:#fbfaf5;}
@@ -833,6 +842,7 @@
       <div class="calc-grid" id="calcGrid"></div>
     </div>
     <div class="calc-body" id="formulaPane" style="display:none;"></div>
+    <div id="fKeypad"></div>
   </div>
 
   <!-- Bild groß ansehen -->
@@ -2825,7 +2835,7 @@ if('serviceWorker' in navigator){
       el.className = 'f-item';
       el.innerHTML = `<div class="f-head"><div><div class="f-name">${fz(f.n)}</div><div class="f-formula">${fzFrac(FH[f.n] || f.f)}</div></div><span style="color:var(--copper);">›</span></div>
         <div class="f-body">
-          ${f.i.map(([k,l,u,d]) => `<div class="f-row"><label>${fz(l)}</label><input type="text" inputmode="decimal" data-k="${k}" value="${d ? d.replace('.',',') : ''}"><span class="f-unit">${escapeHtml(u)}</span></div>`).join('')}
+          ${f.i.map(([k,l,u,d]) => `<div class="f-row"><label>${fz(l)}</label><input type="text" inputmode="none" autocomplete="off" data-k="${k}" value="${d ? d.replace('.',',') : ''}"><span class="f-unit">${escapeHtml(u)}</span></div>`).join('')}
           <div class="f-out"></div>
           <button class="btn-secondary f-take" type="button" style="width:100%;padding:10px;">Ergebnis in Taschenrechner übernehmen</button>
         </div>`;
@@ -2843,7 +2853,7 @@ if('serviceWorker' in navigator){
         const r = f.c(v);
         if(!isFinite(r)){ out.textContent = 'nicht berechenbar'; last = null; return; }
         last = r;
-        const h = prefixHint(r);
+        const h = ['V','A','W','VA','var','Ω','Hz','H','F','s'].includes(f.u) ? prefixHint(r) : '';
         out.innerHTML = fz(f.o) + ' = ' + escapeHtml(fmt(r) + ' ' + f.u + (h ? '  (' + h.replace('= ','') + f.u + ')' : ''));
       };
       el.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recalc));
@@ -2862,11 +2872,56 @@ if('serviceWorker' in navigator){
     });
   }
   function switchTab(t){
+    if(t !== 'formulas') hideKeypad();
     document.querySelectorAll('.calc-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     $('calcPane').style.display = t === 'calc' ? 'flex' : 'none';
     $('formulaPane').style.display = t === 'formulas' ? 'block' : 'none';
   }
   document.querySelectorAll('.calc-tab').forEach(b => b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
+
+  // Eigene Zahlentastatur für die Formel-Felder (statt Handy-Tastatur, die sonst alles verdeckt)
+  let activeInput = null;
+  const KP = [['7','8','9','k','M'],['4','5','6','m','µ'],['1','2','3','n','⌫'],['0',',','−','C','✓']];
+  const kp = $('fKeypad');
+  KP.flat().forEach(k => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = k;
+    if(k === '✓') b.className = 'kp-ok';
+    if(k === '⌫' || k === 'C') b.className = 'kp-del';
+    if('kMmµn'.includes(k)) b.className = 'kp-pre';
+    b.addEventListener('pointerdown', e => e.preventDefault()); // Feld behält den Fokus
+    b.addEventListener('click', () => {
+      if(!activeInput) return;
+      if(k === '✓'){
+        // zum nächsten Feld der Formel springen, sonst Tastatur zu
+        const all = [...activeInput.closest('.f-body').querySelectorAll('input')];
+        const next = all[all.indexOf(activeInput) + 1];
+        if(next) focusInput(next); else hideKeypad();
+        return;
+      }
+      let v = activeInput.value;
+      if(k === '⌫') v = v.slice(0, -1);
+      else if(k === 'C') v = '';
+      else if(k === '−') v = v.startsWith('-') ? v.slice(1) : '-' + v;
+      else v += k;
+      activeInput.value = v;
+      activeInput.dispatchEvent(new Event('input'));
+    });
+    kp.appendChild(b);
+  });
+  function focusInput(inp){
+    if(activeInput) activeInput.classList.remove('kp-active');
+    activeInput = inp; inp.classList.add('kp-active');
+    kp.classList.add('open');
+    inp.focus({ preventScroll: true });
+    requestAnimationFrame(() => inp.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  }
+  function hideKeypad(){
+    if(activeInput){ activeInput.classList.remove('kp-active'); activeInput.blur(); }
+    activeInput = null; kp.classList.remove('open');
+  }
+  $('formulaPane').addEventListener('focusin', e => { if(e.target.matches('input[data-k]')) focusInput(e.target); });
+  $('formulaPane').addEventListener('click', e => { if(e.target.matches('input[data-k]')) focusInput(e.target); });
   renderFormulas();
   window.openCalc = function(){
     // Beim Lernen: Rechner oben, Nebenrechnung bleibt unten sichtbar
@@ -2878,6 +2933,7 @@ if('serviceWorker' in navigator){
     show();
   };
   window.closeCalc = function(){
+    hideKeypad();
     $('calcScreen').classList.remove('open');
     $('calcScreen').classList.remove('docked');
     if(window.scratchLive) scratchLive('');
