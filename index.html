@@ -523,6 +523,10 @@
   .f-unit{width:40px;font-size:13px;color:var(--muted);}
   .f-out{font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--copper);margin:6px 0 8px;min-height:24px;}
   .f-formula sub, .f-out sub, .f-row label sub, .f-name sub{font-size:.72em;vertical-align:-0.25em;line-height:0;}
+  .frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 3px;}
+  .frac > span{line-height:1.35;padding:0 3px;white-space:nowrap;}
+  .frac > span:first-child{border-bottom:1.5px solid currentColor;}
+  .f-formula{line-height:1.6;}
   .f-group{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 2px 8px;}
   .learn-body > *{flex-shrink:0;}
   #scratchPanel{flex:0 0 50%;display:none;flex-direction:column;border-top:3px solid var(--copper);background:#fbfaf5;}
@@ -2787,6 +2791,11 @@ if('serviceWorker' in navigator){
       .replace(/([A-Za-zηφκû])_([A-Za-z0-9]+)/g, '$1<sub>$2</sub>')
       .replace(/(^|[^A-Za-z])([A-Z])(\d)(?!\d)/g, '$1$2<sub>$3</sub>');
   }
+  // Brüche wie auf Papier: Zähler oben, Bruchstrich, Nenner unten
+  const FH = {"Ohmsches Gesetz – Strom": "I = [[U||R]]", "Ohmsches Gesetz – Widerstand": "R = [[U||I]]", "Parallelschaltung": "[[1||R]] = [[1||R1]] + [[1||R2]] (+ [[1||R3]])", "Leitungswiderstand (Hin + Rück)": "R = [[2 · l||κ · A]]", "Wirkungsgrad": "η = [[P_ab||P_zu]]", "Motorstrom aus dem Netz": "I = [[P||√3 · U · cos φ · η]]", "Strom Wechselstrom-Verbraucher": "I = [[P||U · cos φ]]", "Synchrondrehzahl": "n_s = [[f · 60||p]]", "Läuferdrehzahl aus Schlupf": "n = [[f · 60||p]] · (1 − [[s||100 %]])", "Schlupf": "s = [[n_s − n||n_s]] · 100 %", "Spannungsfall Wechselstrom": "ΔU = [[2 · l · I · cos φ||κ · A]]", "Spannungsfall Drehstrom": "ΔU = [[√3 · l · I · cos φ||κ · A]]", "Frequenz aus Periodendauer": "f = [[1||T]]", "Effektivwert": "U = [[û||√2]]", "Kapazitiver Blindwiderstand": "X_C = [[1||2 · π · f · C]]", "Trafo Übersetzung": "U_2 = U_1 · [[N_2||N_1]]"};
+  function fzFrac(str){
+    return fz(str).replace(/\[\[(.+?)\|\|(.+?)\]\]/g, '<span class="frac"><span>$1</span><span>$2</span></span>');
+  }
   function renderFormulas(){
     const pane = $('formulaPane');
     pane.innerHTML = '<p class="crop-hint" style="margin:0 2px 4px;">Formel antippen, Werte eingeben – Komma und Vorsätze wie 4,7k oder 20m gehen auch.</p>';
@@ -2794,7 +2803,7 @@ if('serviceWorker' in navigator){
       if(Array.isArray(f)){ const g = document.createElement('div'); g.className = 'f-group'; g.textContent = f[0]; pane.appendChild(g); return; }
       const el = document.createElement('div');
       el.className = 'f-item';
-      el.innerHTML = `<div class="f-head"><div><div class="f-name">${fz(f.n)}</div><div class="f-formula">${fz(f.f)}</div></div><span style="color:var(--copper);">›</span></div>
+      el.innerHTML = `<div class="f-head"><div><div class="f-name">${fz(f.n)}</div><div class="f-formula">${fzFrac(FH[f.n] || f.f)}</div></div><span style="color:var(--copper);">›</span></div>
         <div class="f-body">
           ${f.i.map(([k,l,u,d]) => `<div class="f-row"><label>${fz(l)}</label><input type="text" inputmode="decimal" data-k="${k}" value="${d ? d.replace('.',',') : ''}"><span class="f-unit">${escapeHtml(u)}</span></div>`).join('')}
           <div class="f-out"></div>
