@@ -2461,6 +2461,52 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+// --- Zurück-Taste vom Handy: offenes Fenster schließen statt die App zu beenden ---
+(function(){
+  // Reihenfolge = was oben liegt zuerst
+  const OVERLAYS = [
+    ['imgViewer',      () => document.getElementById('imgViewer').classList.remove('open')],
+    ['cropScreen',     () => closeCropScreen()],
+    ['groupScreen',    () => closeGroupScreen()],
+    ['catMenuOverlay', () => closeCategoryMenu()],
+    ['importOverlay',  () => closeImport()],
+    ['categoryOverlay',() => closeCategoryOverlay()],
+    ['sheetOverlay',   () => closeSheet()],
+    ['learn',          () => closeLearning()]
+  ];
+  const isOpen = id => { const el = document.getElementById(id); return el && el.classList.contains('open'); };
+  const anyOpen = () => OVERLAYS.some(([id]) => isOpen(id));
+  let pushed = false;     // eigener Verlaufseintrag für "Fenster offen" vorhanden?
+  let ignorePop = false;  // Zurück, das wir selbst ausgelöst haben
+
+  const sync = () => {
+    if(anyOpen() && !pushed){
+      history.pushState({ lernkarteiOverlay: true }, '');
+      pushed = true;
+    }else if(!anyOpen() && pushed){
+      // Fenster wurde per Knopf geschlossen: unseren Verlaufseintrag wieder entfernen
+      pushed = false;
+      ignorePop = true;
+      history.back();
+    }
+  };
+  const obs = new MutationObserver(sync);
+  OVERLAYS.forEach(([id]) => {
+    const el = document.getElementById(id);
+    if(el) obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  window.addEventListener('popstate', () => {
+    if(ignorePop){ ignorePop = false; return; }
+    pushed = false;
+    const top = OVERLAYS.find(([id]) => isOpen(id));
+    if(top){
+      try{ top[1](); }catch(e){ document.getElementById(top[0]).classList.remove('open'); }
+    }
+    // Falls darunter noch ein Fenster offen ist, kümmert sich sync() um den nächsten Eintrag
+  });
+})();
 </script>
 </body>
 </html>
