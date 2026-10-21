@@ -434,6 +434,25 @@
     font-size:15px;
     line-height:1.4;
   }
+  .calc-sub{background:var(--surface);border-radius:12px;padding:12px 14px;margin-bottom:12px;}
+  .calc-sub-text{font-size:14.5px;line-height:1.45;margin-bottom:8px;}
+  .calc-ans{width:100%;font-size:18px;padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-family:'IBM Plex Mono',monospace;}
+  .calc-ans.kp-active{outline:2px solid var(--copper);outline-offset:1px;}
+  .calc-sub.correct{box-shadow:inset 0 0 0 2px var(--green);}
+  .calc-sub.wrong{box-shadow:inset 0 0 0 2px var(--red);}
+  .calc-fb{font-size:13.5px;margin-top:7px;line-height:1.4;}
+  .calc-fb.ok{color:var(--green);} .calc-fb.bad{color:var(--red);}
+  #ansKp{display:none;flex-direction:column;gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);flex-shrink:0;}
+  #ansKp.open{display:flex;}
+  #ansKp .ak-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;max-height:34vh;overflow-y:auto;}
+  #ansKp button{background:#3a3f43;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 0;font-size:16px;}
+  #ansKp .ak-tabs{display:grid;grid-template-columns:1fr 1fr 1fr .7fr .9fr;gap:5px;}
+  #ansKp .ak-tabs button{font-size:13.5px;background:var(--surface2);}
+  #ansKp .ak-tabs button.active{background:var(--copper-dim);color:#fff;}
+  #ansKp button.ak-ok{background:var(--copper);color:#1b1d1f;font-weight:700;}
+  #ansKp button.ak-del{color:var(--red);}
+  #ansKp button.ak-pre{color:#8fc1e3;}
+  #ansKp button:active{filter:brightness(1.4);}
   .tbl-wrap{overflow-x:auto;margin-bottom:6px;}
   .learn-table{width:100%;border-collapse:collapse;font-size:15px;}
   .learn-table th,.learn-table td{border:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:middle;}
@@ -752,6 +771,11 @@
       <div class="option-hint">Markiere mit dem Punkt links, welche Antwort richtig ist.</div>
       <div id="optionsList"></div>
       </div>
+      <div id="calcSection" style="display:none;">
+      <label class="field-label">Rechenaufgabe</label>
+      <div class="option-hint">Pro Teil zwei Zeilen: „Teilaufgabe: …“ und darunter „Lösung: I = 0,435 A“.</div>
+      <textarea id="calcInput" rows="7"></textarea>
+      </div>
       <div id="tableSection" style="display:none;">
       <label class="field-label">Tabelle</label>
       <div class="option-hint">Erste Zeile = Spaltenköpfe, Spalten mit | trennen. Felder zum Ausfüllen bekommen ein * davor.</div>
@@ -808,7 +832,7 @@
 <input type="text" id="importNewCategoryInput" placeholder="Name der neuen Rubrik" style="display:none;margin-top:8px;">
 <label class="field-label">Text mit Fragen</label>
 <textarea id="importText" placeholder="Was ist das oberste Ziel einer Unternehmung?&#10;*1) Erwirtschaften von Gewinn&#10;2) ...&#10;3) ...&#10;4) ...&#10;5) ..."></textarea>
-<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen. Optional über der Frage eine Zeile <b>Bild: …</b> mit dem Bildnamen oder Link, dann wird das Bild zur Frage angezeigt. <b>Tabellen-Aufgabe:</b> unter die Frage eine Zeile <b>Tabelle: Kopf1 | Kopf2 | …</b>, darunter je Zeile die Zellen mit | getrennt; Felder zum Ausfüllen bekommen ein * davor (z.B. 1 | *N | *Blau).</div>
+<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen. Optional über der Frage eine Zeile <b>Bild: …</b> mit dem Bildnamen oder Link, dann wird das Bild zur Frage angezeigt. <b>Tabellen-Aufgabe:</b> unter die Frage eine Zeile <b>Tabelle: Kopf1 | Kopf2 | …</b>, darunter je Zeile die Zellen mit | getrennt; Felder zum Ausfüllen bekommen ein * davor (z.B. 1 | *N | *Blau). <b>Rechenaufgabe:</b> unter den Aufgabentext je Teil eine Zeile <b>Teilaufgabe: …</b> und darunter <b>Lösung: I = 0,435 A</b>.</div>
 <div class="form-error" id="importError"></div>
 <div class="sheet-actions">
 <button class="btn-secondary" id="importCancelBtn">Abbrechen</button>
@@ -852,6 +876,7 @@
       <span class="learn-count" id="learnCount"></span>
     </div>
     <div class="learn-body" id="learnBody"></div>
+    <div id="ansKp"><div class="ak-grid" id="ansKpGrid"></div><div class="ak-tabs" id="ansKpTabs"></div></div>
     <div id="scratchPanel">
       <div class="scratch-bar">
         <button type="button" id="scratchPen" class="active" title="Stift">✏️</button>
@@ -1024,6 +1049,7 @@ function buildShareCards(cat){
     const o = { question: c.question, options: c.options, correctIndex: c.correctIndex };
     if(c.image) o.image = c.image;
     if(c.table) o.table = c.table;
+    if(c.calc) o.calc = c.calc;
     return o;
   });
   let droppedPhotos = 0;
@@ -1039,7 +1065,7 @@ function shareDiffers(sh, cat){
   const theirs = sh.cards || [];
   if(mine.length !== theirs.length) return true;
   const set = new Map(theirs.map(c => [normQ(c.question), c]));
-  return mine.some(c => { const t = set.get(normQ(c.question)); return !t || t.correctIndex !== c.correctIndex || (t.image || '') !== (c.image || '') || JSON.stringify(t.table || null) !== JSON.stringify(c.table || null) || JSON.stringify(t.options) !== JSON.stringify(c.options); });
+  return mine.some(c => { const t = set.get(normQ(c.question)); return !t || t.correctIndex !== c.correctIndex || (t.image || '') !== (c.image || '') || JSON.stringify(t.table || null) !== JSON.stringify(c.table || null) || JSON.stringify(t.calc || null) !== JSON.stringify(c.calc || null) || JSON.stringify(t.options) !== JSON.stringify(c.options); });
 }
 // Eigene geteilte Rubriken automatisch auf den neuesten Stand bringen
 async function syncMyShares(onlyCode){
@@ -1293,7 +1319,7 @@ function render(){
     el.className = 'card status-' + status + (selectedCards.has(card.id) ? ' selected' : '');
     el.innerHTML = `
       <div class="sel-box">${selectedCards.has(card.id) ? '✓' : ''}</div>
-      <div class="card-q">${card.table ? '<span class="card-img-tag">▦</span>' : ''}${card.image ? '<span class="card-img-tag">🖼️</span>' : ''}${escapeHtml(card.question)}</div>
+      <div class="card-q">${card.table ? '<span class="card-img-tag">▦</span>' : ''}${card.calc ? '<span class="card-img-tag">🧮</span>' : ''}${card.image ? '<span class="card-img-tag">🖼️</span>' : ''}${escapeHtml(card.question)}</div>
       <div class="leds">
         ${[0,1,2].map(i => `<div class="led ${i < card.streak ? 'on-'+status : ''}"></div>`).join('')}
       </div>
@@ -1616,6 +1642,7 @@ function openAdd(){
   populateCategorySelect(selectedCategoryId);
   renderOptionRows(['', '', '', '', ''], null);
   showTableSection(null);
+  showCalcSection(null);
   setSheetImage('');
   document.getElementById('sheetOverlay').classList.add('open');
 }
@@ -1636,6 +1663,7 @@ function openEdit(id){
   populateCategorySelect(card.categoryId);
   renderOptionRows(card.options || [], card.correctIndex);
   showTableSection(card.table || null);
+  showCalcSection(card.calc || null);
   setSheetImage(card.image || '');
   document.getElementById('sheetOverlay').classList.add('open');
 }
@@ -1649,6 +1677,11 @@ function showTableSection(table){
   document.getElementById('optionsSection').style.display = table ? 'none' : '';
   document.getElementById('tableSection').style.display = table ? '' : 'none';
   document.getElementById('tableInput').value = table ? tableToText(table) : '';
+}
+function showCalcSection(calc){
+  if(calc) document.getElementById('optionsSection').style.display = 'none';
+  document.getElementById('calcSection').style.display = calc ? '' : 'none';
+  document.getElementById('calcInput').value = calc ? calcToText(calc) : '';
 }
 function closeSheet(){
   document.getElementById('sheetOverlay').classList.remove('open');
@@ -1678,11 +1711,19 @@ async function saveSheet(){
     if(t.error){ errorEl.textContent = t.error; return; }
     newTable = t.table;
   }
-  if(!isTable && options.some(o => !o)){
+  const isCalc = !!(editCard && editCard.calc);
+  let newCalc = null;
+  if(isCalc){
+    const lines = document.getElementById('calcInput').value.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(l => l);
+    const c = parseCalcLines(lines);
+    if(c.error){ errorEl.textContent = c.error; return; }
+    newCalc = c.calc;
+  }
+  if(!isTable && !isCalc && options.some(o => !o)){
     errorEl.textContent = 'Bitte alle 5 Antwortmöglichkeiten ausfüllen.';
     return;
   }
-  if(!isTable && !checked){
+  if(!isTable && !isCalc && !checked){
     errorEl.textContent = 'Bitte markieren, welche Antwort richtig ist.';
     return;
   }
@@ -1703,7 +1744,7 @@ async function saveSheet(){
   }
   warningEl.textContent = '';
 
-  const correctIndex = isTable ? -1 : parseInt(checked.value, 10);
+  const correctIndex = (isTable || isCalc) ? -1 : parseInt(checked.value, 10);
 
   let categoryId = catSelectValue;
   if(catSelectValue === '__new__'){
@@ -1717,7 +1758,10 @@ async function saveSheet(){
   if(editingId){
     const card = cards.find(c=>c.id===editingId);
     card.question = q;
-    if(isTable){
+    if(isCalc){
+      if(JSON.stringify(card.calc) !== JSON.stringify(newCalc)) card.streak = 0;
+      card.calc = newCalc; card.options = []; card.correctIndex = -1;
+    }else if(isTable){
       if(JSON.stringify(card.table) !== JSON.stringify(newTable)) card.streak = 0;
       card.table = newTable; card.options = []; card.correctIndex = -1;
     }else{
@@ -1837,6 +1881,58 @@ function tableChoices(t, col){
   t.rows.forEach(r => { const c = r.cells[col]; if(c && c.fill) set.add(c.text); });
   return [...set].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
 }
+// --- Rechenaufgaben: Ergebnis mit Formelzeichen und Einheit eintippen ---
+const UNIT_ALIAS = { 'Euro':'€','EUR':'€','euro':'€','Ohm':'Ω','mm2':'mm²','min⁻¹':'1/min','U/min':'1/min','Std':'h','std':'h','Stunden':'h' };
+const UNIT_BASE = ['A','V','W','Ω','Hz','Wh','VA','var','s','h','min','1/min','%','€','m','m²','mm²','F','H','S','m/Ωmm²','J','°','N','Nm','kg','K'];
+const UNIT_PREFIX = { k:1e3, M:1e6, G:1e9, m:1e-3, 'µ':1e-6, u:1e-6, n:1e-9 };
+function parseUnit(u){
+  u = (u || '').trim();
+  if(!u) return { base:'', f:1 };
+  if(UNIT_ALIAS[u]) u = UNIT_ALIAS[u];
+  if(u === 'ct') return { base:'€', f:0.01 };
+  if(u === '%') return { base:'', f:0.01 };
+  if(UNIT_BASE.includes(u)) return { base:u, f:1 };
+  const p = u[0], rest = UNIT_ALIAS[u.slice(1)] || u.slice(1);
+  if(UNIT_PREFIX[p] && UNIT_BASE.includes(rest)) return { base:rest, f:UNIT_PREFIX[p] };
+  return null;
+}
+const normSym = x => (x || '').replace(/[\s_]/g, '').replace(/cosφ/i, 'cosφ');
+function parseCalcAnswer(str){
+  const m = (str || '').replace(/−/g, '-').match(/^\s*([^=]+?)\s*=\s*(-?\d+(?:[.,]\d+)?)\s*(.*?)\s*$/);
+  if(!m) return null;
+  const unit = parseUnit(m[3]);
+  if(!unit) return null;
+  const num = parseFloat(m[2].replace(',', '.'));
+  return { sym: normSym(m[1]), num, unit: m[3].trim(), base: unit.base, value: num * unit.f };
+}
+function checkCalcAnswer(given, expected){
+  const e = parseCalcAnswer(expected), g = parseCalcAnswer(given);
+  if(!g) return { ok:false, msg:'So kann ich das nicht lesen – Form: Formelzeichen = Zahl Einheit' };
+  if(g.sym !== e.sym) return { ok:false, msg:'Falsches Formelzeichen' };
+  if(g.base !== e.base) return { ok:false, msg:'Falsche Einheit' };
+  const tol = Math.max(Math.abs(e.value) * 0.02, 1e-12);
+  if(Math.abs(g.value - e.value) > tol) return { ok:false, msg:'Zahlenwert stimmt nicht' };
+  return { ok:true };
+}
+function parseCalcLines(lines){
+  const subs = [];
+  for(const l of lines){
+    const t = l.match(/^teilaufgabe\s*:\s*(.*)$/i);
+    const a = l.match(/^l(?:ö|oe)sung\s*:\s*(.+)$/i);
+    if(t) subs.push({ text: t[1].trim(), answer: '' });
+    else if(a){
+      if(!subs.length) subs.push({ text: '', answer: '' });
+      subs[subs.length - 1].answer = a[1].trim();
+    }else if(subs.length && !subs[subs.length - 1].answer) subs[subs.length - 1].text += ' ' + l;
+  }
+  if(!subs.length) return { error: 'keine Teilaufgabe gefunden' };
+  for(const x of subs){
+    if(!x.answer) return { error: 'Teilaufgabe "' + x.text.slice(0, 25) + '…" hat keine Lösung' };
+    if(!parseCalcAnswer(x.answer)) return { error: 'Lösung "' + x.answer + '" nicht lesbar (Form: I = 0,435 A)' };
+  }
+  return { calc: subs };
+}
+const calcToText = c => c.map(x => 'Teilaufgabe: ' + x.text + '\nLösung: ' + x.answer).join('\n');
 function parseImportText(text){
   const blocks = text.replace(/\r/g, '').replace(/^\s*```.*$/gm, '').split(/\n\s*\n/).map(b => b.trim()).filter(b => b);
   const result = [];
@@ -1848,9 +1944,11 @@ function parseImportText(text){
     let image = '';
     let tableHead = null;
     const tableLines = [];
+    const calcLines = [];
     block.split('\n').map(l => l.trim()).filter(l => l).forEach(line => {
       const im = line.match(/^bild\s*:\s*(\S+)\s*$/i);
       if(im){ image = im[1]; return; }
+      if(/^(teilaufgabe|l(ö|oe)sung)\s*:/i.test(line) || calcLines.length){ calcLines.push(line); return; }
       const tm = line.match(/^tabelle\s*:\s*(.+)$/i);
       if(tm && tableHead === null){ tableHead = tm[1]; return; }
       if(tableHead !== null){ tableLines.push(line); return; }
@@ -1865,10 +1963,15 @@ function parseImportText(text){
       }
     });
     // Normaler Begleittext (z.B. versehentlich mitkopierte Chat-Nachricht) ohne Antworten einfach ignorieren
-    if(options.length === 0 && tableHead === null && !image) return;
+    if(options.length === 0 && tableHead === null && !calcLines.length && !image) return;
     const question = qLines.join(' ').trim();
     const label = 'Frage ' + (bi + 1) + (question ? ' ("' + question.slice(0, 30) + '…")' : '');
     if(!question) problems.push(label + ': keine Frage gefunden');
+    else if(calcLines.length){
+      const c = parseCalcLines(calcLines);
+      if(c.error) problems.push(label + ': ' + c.error);
+      else result.push({ question, options: [], correctIndex: -1, image, calc: c.calc });
+    }
     else if(tableHead !== null){
       const t = parseTable(tableHead, tableLines);
       if(t.error) problems.push(label + ': ' + t.error);
@@ -1905,6 +2008,7 @@ async function importCards(){
       const ex = cards.find(c => norm(c.question) === norm(r.question));
       if(r.image && ex && !ex.image){ ex.image = r.image; imgAdded++; }
       else if(r.table && ex && JSON.stringify(ex.table || null) !== JSON.stringify(r.table)){ ex.table = r.table; ex.options = []; ex.correctIndex = -1; imgAdded++; }
+      else if(r.calc && ex && JSON.stringify(ex.calc || null) !== JSON.stringify(r.calc)){ ex.calc = r.calc; ex.options = []; ex.correctIndex = -1; imgAdded++; }
       else skipped++;
       return;
     }
@@ -1912,6 +2016,7 @@ async function importCards(){
     const nc = { id: Date.now().toString(36) + '-' + i, question: r.question, options: r.options, correctIndex: r.correctIndex, streak: 0, categoryId };
     if(r.image) nc.image = r.image;
     if(r.table) nc.table = r.table;
+    if(r.calc) nc.calc = r.calc;
     cards.push(nc);
     added++;
   });
@@ -2471,7 +2576,9 @@ ${greenCardsInView().length > 0 ? '<button class="btn-secondary" id="learnResetG
   if(window.clearScratch) clearScratch();
   countEl.textContent = (learnIndex+1) + ' / ' + learnQueue.length;
   answered = false;
+  if(window.hideAnsKp) hideAnsKp();
   if(card.table){ renderTableCard(card, body); return; }
+  if(card.calc){ renderCalcCard(card, body); return; }
   const order = shuffledOptions(card);
 
   body.innerHTML = `
@@ -2551,6 +2658,123 @@ function renderTableCard(card, body){
   });
 }
 
+function renderCalcCard(card, body){
+  body.innerHTML = `
+    <div class="learn-card${card.image ? ' has-img' : ''}">
+      ${card.image ? `<img class="learn-img" id="learnImg" src="${escapeHtml(imageSrc(card.image))}" alt="Bild zur Frage"><div class="learn-img-hint">Bild antippen zum Vergrößern</div>` : ''}
+      <div class="learn-q">${escapeHtml(card.question)}</div>
+    </div>
+    ${card.calc.map((x, i) => `<div class="calc-sub" data-i="${i}">
+      ${x.text ? `<div class="calc-sub-text">${i + 1}. ${escapeHtml(x.text)}</div>` : ''}
+      <input class="calc-ans" type="text" inputmode="none" autocomplete="off" readonly placeholder="z.B. I = 0,5 A">
+      <div class="calc-fb"></div>
+    </div>`).join('')}
+    <div class="tbl-hint" id="tblHint"></div>
+    <button class="learn-continue" id="calcCheck">Prüfen</button>
+  `;
+  const learnImg = document.getElementById('learnImg');
+  if(learnImg){
+    learnImg.addEventListener('click', ()=> openImgViewer(learnImg.src));
+    learnImg.addEventListener('error', ()=>{ learnImg.nextElementSibling.textContent = 'Bild konnte nicht geladen werden (keine Internetverbindung?)'; learnImg.style.display = 'none'; });
+  }
+  body.querySelectorAll('.calc-ans').forEach(inp => inp.addEventListener('click', () => { if(!answered) showAnsKp(inp); }));
+  const first = body.querySelector('.calc-ans');
+  if(first) showAnsKp(first);
+  document.getElementById('calcCheck').addEventListener('click', async ()=>{
+    if(answered) return;
+    const inps = [...body.querySelectorAll('.calc-ans')];
+    if(inps.some(i => !i.value.trim())){ document.getElementById('tblHint').textContent = 'Bitte erst alle Ergebnisse eintragen.'; return; }
+    answered = true;
+    hideAnsKp();
+    document.getElementById('tblHint').textContent = '';
+    let allOk = true;
+    inps.forEach((inp, i) => {
+      const box = inp.closest('.calc-sub'), fb = box.querySelector('.calc-fb');
+      const r = checkCalcAnswer(inp.value, card.calc[i].answer);
+      box.classList.add(r.ok ? 'correct' : 'wrong');
+      if(r.ok){ fb.className = 'calc-fb ok'; fb.textContent = '✓ Richtig (' + card.calc[i].answer + ')'; }
+      else { allOk = false; fb.className = 'calc-fb bad'; fb.textContent = r.msg + ' → richtig: ' + card.calc[i].answer; }
+    });
+    document.getElementById('calcCheck').remove();
+    await finishAnswer(card, allOk);
+  });
+}
+
+// Tastatur für Ergebnisse: Zahlen, Formelzeichen, Einheiten
+(function(){
+  const PAGES = {
+    zahl: ['7','8','9','⌫','4','5','6','Leeren','1','2','3','=','0',',','−',''],
+    zeichen: ['I','U','R','P','W','Q','S','Z','XL','XC','f','n','ns','p','s','t','T','η','cos φ','φ','l','A','d','κ','ρ','C','L','N','K','ΔU','Ri','Rv','Pab','Pzu','U0','UK','IN','I1','I2','U1','U2','R1','R2','R3','Rges','N1','N2'],
+    einheit: ['k','M','m','µ','A','V','W','Ω','Wh','kWh','VA','var','Hz','s','h','min','1/min','%','€','ct','m²','mm²','F','H','J','°']
+  };
+  const PRE = ['k','M','m','µ'];
+  const kp = document.getElementById('ansKp'), grid = document.getElementById('ansKpGrid'), tabs = document.getElementById('ansKpTabs');
+  let page = 'zahl', target = null;
+  function put(k){
+    if(!target) return;
+    let v = target.value;
+    if(k === '⌫'){
+      if(/=\s*$/.test(v)) v = v.replace(/\s*=\s*$/, '');
+      else { v = v.replace(/\s+$/, '').slice(0, -1).replace(/\s+$/, ''); if(/=$/.test(v)) v += ' '; }
+    }
+    else if(k === 'Leeren') v = '';
+    else if(k === '=') v = v.replace(/\s*=?\s*$/, '') + ' = ';
+    else if(page === 'zeichen'){
+      v = (v.trim() === '' ? '' : v) + k;
+      if(!v.includes('=')){ v += ' = '; page = 'zahl'; draw(); }
+    }else if(page === 'einheit'){
+      const last = v.slice(-1);
+      if(PRE.includes(k)) v = v.replace(/\s+$/, '') + ' ' + k;
+      else v = (PRE.includes(last) && v.slice(-2, -1) === ' ') ? v + k : v.replace(/\s+$/, '') + ' ' + k;
+    }else{
+      if(k === '−') v += '-'; else v += k;
+    }
+    target.value = v;
+  }
+  function draw(){
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = page === 'zahl' ? 'repeat(4,1fr)' : 'repeat(6,1fr)';
+    PAGES[page].forEach(k => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = k;
+      if(!k){ b.style.visibility = 'hidden'; }
+      if(k === '⌫' || k === 'Leeren') b.className = 'ak-del';
+      if(page === 'einheit' && PRE.includes(k)) b.className = 'ak-pre';
+      b.addEventListener('pointerdown', e => e.preventDefault());
+      b.addEventListener('click', () => put(k));
+      grid.appendChild(b);
+    });
+    tabs.innerHTML = '';
+    [['zahl','123'],['zeichen','Zeichen'],['einheit','Einheit'],['del','⌫'],['ok','✓ Fertig']].forEach(([id, label]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+      if(id === page) b.className = 'active';
+      if(id === 'ok') b.className = 'ak-ok';
+      if(id === 'del') b.className = 'ak-del';
+      b.addEventListener('pointerdown', e => e.preventDefault());
+      b.addEventListener('click', () => {
+        if(id === 'ok'){
+          const all = [...document.querySelectorAll('#learnBody .calc-ans')];
+          const next = all[all.indexOf(target) + 1];
+          if(next) showAnsKp(next); else hideAnsKp();
+        }else if(id === 'del') put('⌫');
+        else { page = id; draw(); }
+      });
+      tabs.appendChild(b);
+    });
+  }
+  window.showAnsKp = function(inp){
+    if(target) target.classList.remove('kp-active');
+    target = inp; inp.classList.add('kp-active');
+    page = inp.value.includes('=') ? (/\d\s*$/.test(inp.value) ? 'einheit' : 'zahl') : 'zeichen';
+    draw();
+    kp.classList.add('open');
+    requestAnimationFrame(() => inp.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  };
+  window.hideAnsKp = function(){
+    if(target) target.classList.remove('kp-active');
+    target = null; kp.classList.remove('open');
+  };
+})();
+
 async function finishAnswer(card, correct){
   const original = cards.find(c=>c.id===card.id);
   original.streak = correct ? Math.min(3, original.streak + 1) : 0;
@@ -2575,6 +2799,7 @@ async function finishAnswer(card, correct){
 }
 
 function closeLearning(){
+  if(window.hideAnsKp) hideAnsKp();
   if(window.closeScratch) closeScratch();
   document.getElementById('learn').classList.remove('open');
   render();
@@ -3016,6 +3241,7 @@ async function importSharedCategory(code, share){
       const ex = cards.find(e => e.categoryId === target.id && normQ(e.question) === normalized);
       if(ex && c.image && !ex.image){ ex.image = c.image; added++; }
       else if(ex && c.table && JSON.stringify(ex.table || null) !== JSON.stringify(c.table)){ ex.table = c.table; ex.options = []; ex.correctIndex = -1; added++; }
+      else if(ex && c.calc && JSON.stringify(ex.calc || null) !== JSON.stringify(c.calc)){ ex.calc = c.calc; ex.options = []; ex.correctIndex = -1; added++; }
       else skipped++;
       return;
     }
@@ -3027,7 +3253,8 @@ async function importSharedCategory(code, share){
       streak: 0,
       categoryId: target.id,
       ...(c.image ? { image: c.image } : {}),
-      ...(c.table ? { table: c.table } : {})
+      ...(c.table ? { table: c.table } : {}),
+      ...(c.calc ? { calc: c.calc } : {})
     });
     added++;
   });
@@ -3165,6 +3392,8 @@ if('serviceWorker' in navigator){
     {n:'Innenwiderstand Spannungsquelle', f:'R_i = (U_0 − U_K) / I', o:'R_i', u:'Ω', i:[['a','Leerlaufspannung U_0 (bei 0 A)','V'],['b','Klemmenspannung U_K (unter Last)','V'],['I','Laststrom I','A']], c:v=>(v.a-v.b)/v.I},
     {n:'Vorwiderstand LED', f:'R_V = (U − U_F) / I_F', o:'R_V', u:'Ω', i:[['U','Betriebsspannung U','V'],['F','Durchlassspannung U_F','V'],['I','Durchlassstrom I_F (z.B. 9,8m)','A']], c:v=>(v.U-v.F)/v.I},
     ['Leistung'],
+    {n:'Elektrische Arbeit', f:'W = P · t', o:'W', u:'kWh', i:[['P','Leistung P','kW'],['t','Zeit t (gesamt)','h']], c:v=>v.P*v.t},
+    {n:'Energiekosten', f:'K = W · Preis', o:'K', u:'€', i:[['W','Arbeit W','kWh'],['k','Preis pro kWh','€/kWh','0,31']], c:v=>v.W*v.k},
     {n:'Leistung Gleichstrom', f:'P = U · I', o:'P', u:'W', i:[['U','Spannung U','V'],['I','Strom I','A']], c:v=>v.U*v.I},
     {n:'Leistung über Widerstand', f:'P = I² · R', o:'P', u:'W', i:[['I','Strom I','A'],['R','Widerstand R','Ω']], c:v=>v.I*v.I*v.R},
     {n:'Wirkleistung Wechselstrom', f:'P = U · I · cos φ', o:'P', u:'W', i:[['U','Spannung U','V','230'],['I','Strom I','A'],['c','cos φ','']], c:v=>v.U*v.I*v.c},
