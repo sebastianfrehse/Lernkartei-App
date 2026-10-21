@@ -193,6 +193,16 @@
     gap:12px;
     align-items:flex-start;
   }
+  .card{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+  .card.selected{outline:2px solid var(--copper);background:rgba(201,114,45,0.14);}
+  .card .sel-box{width:22px;height:22px;border-radius:50%;border:2px solid var(--muted);flex-shrink:0;margin-top:1px;display:none;align-items:center;justify-content:center;font-size:13px;color:#fff;}
+  body.selecting .card .sel-box{display:flex;}
+  .card.selected .sel-box{background:var(--copper);border-color:var(--copper);}
+  body.selecting .fab-row{display:none;}
+  #selectBar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:none;gap:10px;align-items:center;padding:12px 14px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);}
+  #selectBar.open{display:flex;}
+  #selectCount{flex:1;font-size:15px;}
+  body.selecting #cardList{padding-bottom:90px;}
   .card.status-rot{border-left-color:var(--red);}
   .card.status-gelb{border-left-color:var(--yellow);}
   .card.status-gruen{border-left-color:var(--green);}
@@ -756,6 +766,22 @@
     </div>
   </div>
 
+  <!-- Auswahl-Leiste (Karte lange drücken) -->
+  <div id="selectBar">
+    <span id="selectCount">1 ausgewählt</span>
+    <button class="btn-secondary" id="selectCancel" type="button">Abbrechen</button>
+    <button class="btn-primary" id="selectMove" type="button">Verschieben</button>
+  </div>
+  <div class="sheet-overlay" id="moveOverlay">
+    <div class="sheet">
+      <h2 id="moveTitle">Verschieben nach …</h2>
+      <div id="moveList"></div>
+      <input type="text" id="moveNewName" placeholder="Name der neuen Rubrik" style="display:none;margin-top:10px;">
+      <button class="btn-primary" id="moveNewConfirm" type="button" style="display:none;width:100%;margin-top:10px;">Neue Rubrik anlegen und verschieben</button>
+      <button class="danger-link" id="moveClose" type="button" style="color:var(--muted);width:100%;">Abbrechen</button>
+    </div>
+  </div>
+
   <!-- Rubrik-Menü (lange drücken) -->
 <div class="sheet-overlay" id="catMenuOverlay">
 <div class="sheet">
@@ -1258,17 +1284,123 @@ function render(){
   visibleCards.slice().reverse().forEach(card=>{
     const status = statusOf(card);
     const el = document.createElement('div');
-    el.className = 'card status-' + status;
+    el.className = 'card status-' + status + (selectedCards.has(card.id) ? ' selected' : '');
     el.innerHTML = `
+      <div class="sel-box">${selectedCards.has(card.id) ? '✓' : ''}</div>
       <div class="card-q">${card.table ? '<span class="card-img-tag">▦</span>' : ''}${card.image ? '<span class="card-img-tag">🖼️</span>' : ''}${escapeHtml(card.question)}</div>
       <div class="leds">
         ${[0,1,2].map(i => `<div class="led ${i < card.streak ? 'on-'+status : ''}"></div>`).join('')}
       </div>
     `;
-    el.addEventListener('click', ()=>openEdit(card.id));
+    attachCardPress(el, card.id);
     list.appendChild(el);
   });
 }
+
+// --- Karten auswählen (lange drücken) und in andere Rubrik verschieben ---
+const selectedCards = new Set();
+function selecting(){ return selectedCards.size > 0; }
+function updateSelectUI(){
+  document.body.classList.toggle('selecting', selecting());
+  document.getElementById('selectBar').classList.toggle('open', selecting());
+  const n = selectedCards.size;
+  document.getElementById('selectCount').textContent = n + (n === 1 ? ' Karte' : ' Karten') + ' ausgewählt';
+}
+function toggleCardSelect(id){
+  if(selectedCards.has(id)) selectedCards.delete(id); else selectedCards.add(id);
+  updateSelectUI();
+  render();
+}
+function exitSelect(){
+  selectedCards.clear();
+  updateSelectUI();
+  render();
+}
+function attachCardPress(el, id){
+  let timer = null, long = false, sx = 0, sy = 0;
+  el.addEventListener('pointerdown', e => {
+    long = false; sx = e.clientX; sy = e.clientY;
+    timer = setTimeout(() => {
+      timer = null; long = true;
+      if(navigator.vibrate) try{ navigator.vibrate(30); }catch(_){}
+      if(!selectedCards.has(id)) toggleCardSelect(id);
+    }, 500);
+  });
+  el.addEventListener('pointermove', e => {
+    if(timer && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)){ clearTimeout(timer); timer = null; }
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev => el.addEventListener(ev, () => { if(timer){ clearTimeout(timer); timer = null; } }));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('click', () => {
+    if(long){ long = false; return; }
+    if(selecting()) toggleCardSelect(id); else openEdit(id);
+  });
+}
+function openMoveSheet(){
+  if(!selecting()) return;
+  const n = selectedCards.size;
+  document.getElementById('moveTitle').textContent = (n === 1 ? '1 Karte' : n + ' Karten') + ' verschieben nach …';
+  const list = document.getElementById('moveList');
+  list.innerHTML = '';
+  const sel = cards.filter(c => selectedCards.has(c.id));
+  categories.forEach(cat => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn-secondary cat-menu-btn';
+    const allHere = sel.every(c => c.categoryId === cat.id);
+    b.textContent = (allHere ? '✓ ' : '📁 ') + cat.name;
+    if(allHere) b.disabled = true, b.style.opacity = '0.5';
+    b.addEventListener('click', () => moveSelectedTo(cat.id));
+    list.appendChild(b);
+  });
+  const nb = document.createElement('button');
+  nb.type = 'button';
+  nb.className = 'btn-secondary cat-menu-btn';
+  nb.textContent = '+ Neue Rubrik …';
+  nb.addEventListener('click', () => {
+    document.getElementById('moveNewName').style.display = 'block';
+    document.getElementById('moveNewConfirm').style.display = 'block';
+    document.getElementById('moveNewName').focus();
+  });
+  list.appendChild(nb);
+  document.getElementById('moveNewName').value = '';
+  document.getElementById('moveNewName').style.display = 'none';
+  document.getElementById('moveNewConfirm').style.display = 'none';
+  document.getElementById('moveOverlay').classList.add('open');
+}
+function closeMoveSheet(){ document.getElementById('moveOverlay').classList.remove('open'); }
+async function moveSelectedTo(catId){
+  let moved = 0;
+  cards.forEach(c => { if(selectedCards.has(c.id) && c.categoryId !== catId){ c.categoryId = catId; moved++; } });
+  await saveCards();
+  closeMoveSheet();
+  selectedCards.clear();
+  updateSelectUI();
+  render();
+  const cat = categories.find(c => c.id === catId);
+  showToast((moved === 1 ? '1 Karte' : moved + ' Karten') + ' nach „' + (cat ? cat.name : '') + '“ verschoben');
+}
+function showToast(msg){
+  let t = document.getElementById('toastMsg');
+  if(!t){
+    t = document.createElement('div'); t.id = 'toastMsg';
+    t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--surface2);color:var(--text);padding:10px 16px;border-radius:10px;border:1px solid var(--line);z-index:60;font-size:14px;max-width:90%;text-align:center;transition:opacity .3s;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg; t.style.opacity = '1';
+  clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+document.getElementById('selectCancel').addEventListener('click', exitSelect);
+document.getElementById('selectMove').addEventListener('click', openMoveSheet);
+document.getElementById('moveClose').addEventListener('click', closeMoveSheet);
+document.getElementById('moveNewConfirm').addEventListener('click', async () => {
+  const name = document.getElementById('moveNewName').value.trim();
+  if(!name){ document.getElementById('moveNewName').focus(); return; }
+  const cat = { id: 'cat-' + Date.now().toString(36), name };
+  categories.push(cat);
+  await saveCategories();
+  moveSelectedTo(cat.id);
+});
 
 // --- Rubrik anlegen/bearbeiten (von der Startseite) ---
 let editingCategoryId = null;
@@ -3321,7 +3453,9 @@ if('serviceWorker' in navigator){
     ['calcScreen',     () => closeCalc()],
     ['cropScreen',     () => closeCropScreen()],
     ['groupScreen',    () => closeGroupScreen()],
+    ['moveOverlay',    () => closeMoveSheet()],
     ['catMenuOverlay', () => closeCategoryMenu()],
+    ['selectBar',      () => exitSelect()],
     ['importOverlay',  () => closeImport()],
     ['categoryOverlay',() => closeCategoryOverlay()],
     ['sheetOverlay',   () => closeSheet()],
