@@ -201,8 +201,10 @@
   body.selecting .fab-row{display:none;}
   #selectBar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:none;gap:10px;align-items:center;padding:12px 14px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);}
   #selectBar.open{display:flex;}
-  #selectCount{flex:1;font-size:15px;}
-  body.selecting #cardList{padding-bottom:90px;}
+  #selectBar.open{flex-wrap:wrap;}
+  #selectCount{flex:0 0 100%;font-size:14px;color:var(--muted);}
+  #selectBar button{flex:1;padding:11px 6px;font-size:14px;}
+  body.selecting #cardList{padding-bottom:130px;}
   .card.status-rot{border-left-color:var(--red);}
   .card.status-gelb{border-left-color:var(--yellow);}
   .card.status-gruen{border-left-color:var(--green);}
@@ -770,6 +772,7 @@
   <div id="selectBar">
     <span id="selectCount">1 ausgewählt</span>
     <button class="btn-secondary" id="selectCancel" type="button">Abbrechen</button>
+    <button class="btn-secondary" id="selectEdit" type="button">Bearbeiten</button>
     <button class="btn-primary" id="selectMove" type="button">Verschieben</button>
   </div>
   <div class="sheet-overlay" id="moveOverlay">
@@ -1304,7 +1307,8 @@ function updateSelectUI(){
   document.body.classList.toggle('selecting', selecting());
   document.getElementById('selectBar').classList.toggle('open', selecting());
   const n = selectedCards.size;
-  document.getElementById('selectCount').textContent = n + (n === 1 ? ' Karte' : ' Karten') + ' ausgewählt';
+  document.getElementById('selectCount').textContent = n + ' ausgewählt';
+  document.getElementById('selectEdit').style.display = n === 1 ? '' : 'none';
 }
 function toggleCardSelect(id){
   if(selectedCards.has(id)) selectedCards.delete(id); else selectedCards.add(id);
@@ -1333,7 +1337,7 @@ function attachCardPress(el, id){
   el.addEventListener('contextmenu', e => e.preventDefault());
   el.addEventListener('click', () => {
     if(long){ long = false; return; }
-    if(selecting()) toggleCardSelect(id); else openEdit(id);
+    if(selecting()) toggleCardSelect(id); else startLearningAt(id);
   });
 }
 function openMoveSheet(){
@@ -1391,6 +1395,12 @@ function showToast(msg){
   clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 2500);
 }
 document.getElementById('selectCancel').addEventListener('click', exitSelect);
+document.getElementById('selectEdit').addEventListener('click', () => {
+  if(selectedCards.size !== 1) return;
+  const id = [...selectedCards][0];
+  exitSelect();
+  openEdit(id);
+});
 document.getElementById('selectMove').addEventListener('click', openMoveSheet);
 document.getElementById('moveClose').addEventListener('click', closeMoveSheet);
 document.getElementById('moveNewConfirm').addEventListener('click', async () => {
@@ -2372,6 +2382,17 @@ function startLearning(){
   learnIndex = 0;
   answered = false;
   document.getElementById('learn').classList.add('open');
+  renderLearnCard();
+}
+
+// Lernen mit einer bestimmten Karte beginnen (Karte in der Übersicht antippen), danach normal weiter
+function startLearningAt(id){
+  const card = cards.find(c => c.id === id);
+  if(!card) return;
+  startLearning();
+  learnQueue = learnQueue.filter(c => c.id !== id);
+  learnQueue.unshift(card);
+  learnIndex = 0;
   renderLearnCard();
 }
 
