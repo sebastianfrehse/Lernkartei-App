@@ -421,6 +421,16 @@
     font-size:15px;
     line-height:1.4;
   }
+  .tbl-wrap{overflow-x:auto;margin-bottom:6px;}
+  .learn-table{width:100%;border-collapse:collapse;font-size:15px;}
+  .learn-table th,.learn-table td{border:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:middle;}
+  .learn-table th{background:var(--surface2);font-weight:600;font-size:13.5px;}
+  .learn-table td{background:var(--surface);}
+  .learn-table select{width:100%;min-width:90px;padding:8px 6px;font-size:15px;background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:8px;}
+  .learn-table td.correct{background:rgba(78,169,104,0.18);}
+  .learn-table td.wrong{background:rgba(214,86,74,0.18);}
+  .tbl-solution{display:block;margin-top:4px;font-size:13px;color:var(--green);font-weight:600;}
+  .tbl-hint{font-size:13px;color:var(--yellow);margin-top:8px;min-height:1em;}
   .learn-option.correct{background:rgba(78,169,104,0.18);border-color:var(--green);}
   .learn-option.wrong{background:rgba(214,86,74,0.18);border-color:var(--red);}
   .learn-continue{
@@ -724,9 +734,16 @@
       <label class="field-label" id="rawTextLabel" style="display:none;">Erkannter Text komplett (zur Kontrolle, hier kannst du Textteile kopieren)</label>
       <textarea id="rawOcrText" rows="4" style="display:none;"></textarea>
 
+      <div id="optionsSection">
       <label class="field-label">Antwortmöglichkeiten</label>
       <div class="option-hint">Markiere mit dem Punkt links, welche Antwort richtig ist.</div>
       <div id="optionsList"></div>
+      </div>
+      <div id="tableSection" style="display:none;">
+      <label class="field-label">Tabelle</label>
+      <div class="option-hint">Erste Zeile = Spaltenköpfe, Spalten mit | trennen. Felder zum Ausfüllen bekommen ein * davor.</div>
+      <textarea id="tableInput" rows="7"></textarea>
+      </div>
 
       <div class="form-error" id="formError"></div>
 
@@ -759,7 +776,7 @@
 <input type="text" id="importNewCategoryInput" placeholder="Name der neuen Rubrik" style="display:none;margin-top:8px;">
 <label class="field-label">Text mit Fragen</label>
 <textarea id="importText" placeholder="Was ist das oberste Ziel einer Unternehmung?&#10;*1) Erwirtschaften von Gewinn&#10;2) ...&#10;3) ...&#10;4) ...&#10;5) ..."></textarea>
-<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen. Optional über der Frage eine Zeile <b>Bild: …</b> mit dem Bildnamen oder Link, dann wird das Bild zur Frage angezeigt.</div>
+<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen. Optional über der Frage eine Zeile <b>Bild: …</b> mit dem Bildnamen oder Link, dann wird das Bild zur Frage angezeigt. <b>Tabellen-Aufgabe:</b> unter die Frage eine Zeile <b>Tabelle: Kopf1 | Kopf2 | …</b>, darunter je Zeile die Zellen mit | getrennt; Felder zum Ausfüllen bekommen ein * davor (z.B. 1 | *N | *Blau).</div>
 <div class="form-error" id="importError"></div>
 <div class="sheet-actions">
 <button class="btn-secondary" id="importCancelBtn">Abbrechen</button>
@@ -974,6 +991,7 @@ function buildShareCards(cat){
   const list = cards.filter(c => c.categoryId === cat.id).map(c => {
     const o = { question: c.question, options: c.options, correctIndex: c.correctIndex };
     if(c.image) o.image = c.image;
+    if(c.table) o.table = c.table;
     return o;
   });
   let droppedPhotos = 0;
@@ -989,7 +1007,7 @@ function shareDiffers(sh, cat){
   const theirs = sh.cards || [];
   if(mine.length !== theirs.length) return true;
   const set = new Map(theirs.map(c => [normQ(c.question), c]));
-  return mine.some(c => { const t = set.get(normQ(c.question)); return !t || t.correctIndex !== c.correctIndex || (t.image || '') !== (c.image || '') || JSON.stringify(t.options) !== JSON.stringify(c.options); });
+  return mine.some(c => { const t = set.get(normQ(c.question)); return !t || t.correctIndex !== c.correctIndex || (t.image || '') !== (c.image || '') || JSON.stringify(t.table || null) !== JSON.stringify(c.table || null) || JSON.stringify(t.options) !== JSON.stringify(c.options); });
 }
 // Eigene geteilte Rubriken automatisch auf den neuesten Stand bringen
 async function syncMyShares(onlyCode){
@@ -1242,7 +1260,7 @@ function render(){
     const el = document.createElement('div');
     el.className = 'card status-' + status;
     el.innerHTML = `
-      <div class="card-q">${card.image ? '<span class="card-img-tag">🖼️</span>' : ''}${escapeHtml(card.question)}</div>
+      <div class="card-q">${card.table ? '<span class="card-img-tag">▦</span>' : ''}${card.image ? '<span class="card-img-tag">🖼️</span>' : ''}${escapeHtml(card.question)}</div>
       <div class="leds">
         ${[0,1,2].map(i => `<div class="led ${i < card.streak ? 'on-'+status : ''}"></div>`).join('')}
       </div>
@@ -1430,6 +1448,7 @@ function openAdd(){
   resetRawText();
   populateCategorySelect(selectedCategoryId);
   renderOptionRows(['', '', '', '', ''], null);
+  showTableSection(null);
   setSheetImage('');
   document.getElementById('sheetOverlay').classList.add('open');
 }
@@ -1448,7 +1467,8 @@ function openEdit(id){
   document.getElementById('resetCardBtn').style.display = statusOf(card) === 'gruen' ? 'block' : 'none';
   resetRawText();
   populateCategorySelect(card.categoryId);
-  renderOptionRows(card.options, card.correctIndex);
+  renderOptionRows(card.options || [], card.correctIndex);
+  showTableSection(card.table || null);
   setSheetImage(card.image || '');
   document.getElementById('sheetOverlay').classList.add('open');
 }
@@ -1458,6 +1478,11 @@ document.getElementById('qInput').addEventListener('input', ()=>{
   document.getElementById('duplicateWarning').textContent = '';
 });
 
+function showTableSection(table){
+  document.getElementById('optionsSection').style.display = table ? 'none' : '';
+  document.getElementById('tableSection').style.display = table ? '' : 'none';
+  document.getElementById('tableInput').value = table ? tableToText(table) : '';
+}
 function closeSheet(){
   document.getElementById('sheetOverlay').classList.remove('open');
 }
@@ -1477,11 +1502,20 @@ async function saveSheet(){
     errorEl.textContent = 'Bitte eine Frage eingeben.';
     return;
   }
-  if(options.some(o => !o)){
+  const editCard = editingId ? cards.find(c => c.id === editingId) : null;
+  const isTable = !!(editCard && editCard.table);
+  let newTable = null;
+  if(isTable){
+    const lines = document.getElementById('tableInput').value.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(l => l);
+    const t = lines.length ? parseTable(lines[0], lines.slice(1)) : { error: 'Tabelle ist leer' };
+    if(t.error){ errorEl.textContent = t.error; return; }
+    newTable = t.table;
+  }
+  if(!isTable && options.some(o => !o)){
     errorEl.textContent = 'Bitte alle 5 Antwortmöglichkeiten ausfüllen.';
     return;
   }
-  if(!checked){
+  if(!isTable && !checked){
     errorEl.textContent = 'Bitte markieren, welche Antwort richtig ist.';
     return;
   }
@@ -1502,7 +1536,7 @@ async function saveSheet(){
   }
   warningEl.textContent = '';
 
-  const correctIndex = parseInt(checked.value, 10);
+  const correctIndex = isTable ? -1 : parseInt(checked.value, 10);
 
   let categoryId = catSelectValue;
   if(catSelectValue === '__new__'){
@@ -1516,8 +1550,13 @@ async function saveSheet(){
   if(editingId){
     const card = cards.find(c=>c.id===editingId);
     card.question = q;
-    card.options = options;
-    card.correctIndex = correctIndex;
+    if(isTable){
+      if(JSON.stringify(card.table) !== JSON.stringify(newTable)) card.streak = 0;
+      card.table = newTable; card.options = []; card.correctIndex = -1;
+    }else{
+      card.options = options;
+      card.correctIndex = correctIndex;
+    }
     card.categoryId = categoryId;
     if(sheetImage) card.image = sheetImage; else delete card.image;
   }else{
@@ -1600,6 +1639,37 @@ function openImport(){
 function closeImport(){
   document.getElementById('importOverlay').classList.remove('open');
 }
+// --- Tabellen-Karten ---
+// table = { headers:[...], rows:[ {cells:[{text, fill}]} ] }  (keine verschachtelten Arrays wegen Firestore)
+function parseTable(headerLine, rowLines){
+  const split = l => l.split('|').map(x => x.trim());
+  const headers = split(headerLine);
+  if(headers.length < 2 || headers.some(h => !h)) return { error: 'Tabelle braucht mindestens 2 Spaltenköpfe, mit | getrennt' };
+  const rows = [];
+  let fills = 0;
+  for(const l of rowLines){
+    const parts = split(l);
+    if(parts.length > headers.length) return { error: 'Zeile "' + l.slice(0, 25) + '" hat mehr Spalten als Köpfe' };
+    while(parts.length < headers.length) parts.push('');
+    rows.push({ cells: parts.map(p => {
+      const fill = p.startsWith('*');
+      const text = fill ? p.slice(1).trim() : p;
+      if(fill && text) fills++;
+      return { text, fill: fill && !!text };
+    }) });
+  }
+  if(!rows.length) return { error: 'Tabelle hat keine Zeilen' };
+  if(!fills) return { error: 'Tabelle hat keine Felder mit * zum Ausfüllen' };
+  return { table: { headers, rows } };
+}
+function tableToText(t){
+  return [t.headers.join(' | ')].concat(t.rows.map(r => r.cells.map(c => (c.fill ? '*' : '') + c.text).join(' | '))).join('\n');
+}
+function tableChoices(t, col){
+  const set = new Set();
+  t.rows.forEach(r => { const c = r.cells[col]; if(c && c.fill) set.add(c.text); });
+  return [...set].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
+}
 function parseImportText(text){
   const blocks = text.replace(/\r/g, '').split(/\n\s*\n/).map(b => b.trim()).filter(b => b);
   const result = [];
@@ -1609,9 +1679,14 @@ function parseImportText(text){
     const options = [];
     let correctIndex = null;
     let image = '';
+    let tableHead = null;
+    const tableLines = [];
     block.split('\n').map(l => l.trim()).filter(l => l).forEach(line => {
       const im = line.match(/^bild\s*:\s*(\S+)\s*$/i);
       if(im){ image = im[1]; return; }
+      const tm = line.match(/^tabelle\s*:\s*(.+)$/i);
+      if(tm && tableHead === null){ tableHead = tm[1]; return; }
+      if(tableHead !== null){ tableLines.push(line); return; }
       const m = line.match(/^(\*?)\s*([1-5])\s*[).:]\s*(\*?)\s*(.+)$/);
       if(m && qLines.length > 0){
         if(m[1] || m[3]) correctIndex = options.length;
@@ -1625,6 +1700,11 @@ function parseImportText(text){
     const question = qLines.join(' ').trim();
     const label = 'Frage ' + (bi + 1) + (question ? ' ("' + question.slice(0, 30) + '…")' : '');
     if(!question) problems.push(label + ': keine Frage gefunden');
+    else if(tableHead !== null){
+      const t = parseTable(tableHead, tableLines);
+      if(t.error) problems.push(label + ': ' + t.error);
+      else result.push({ question, options: [], correctIndex: -1, image, table: t.table });
+    }
     else if(options.length !== NUM_OPTIONS) problems.push(label + ': ' + options.length + ' statt 5 Antworten');
     else if(correctIndex === null) problems.push(label + ': keine richtige Antwort mit * markiert');
     else result.push({ question, options, correctIndex, image });
@@ -1655,12 +1735,14 @@ async function importCards(){
       // Frage gibt es schon: falls sie noch kein Bild hat, Bild nachtragen
       const ex = cards.find(c => norm(c.question) === norm(r.question));
       if(r.image && ex && !ex.image){ ex.image = r.image; imgAdded++; }
+      else if(r.table && ex && JSON.stringify(ex.table || null) !== JSON.stringify(r.table)){ ex.table = r.table; ex.options = []; ex.correctIndex = -1; imgAdded++; }
       else skipped++;
       return;
     }
     existing.add(norm(r.question));
     const nc = { id: Date.now().toString(36) + '-' + i, question: r.question, options: r.options, correctIndex: r.correctIndex, streak: 0, categoryId };
     if(r.image) nc.image = r.image;
+    if(r.table) nc.table = r.table;
     cards.push(nc);
     added++;
   });
@@ -1668,7 +1750,7 @@ async function importCards(){
   selectedCategoryId = categoryId;
   closeImport();
   render();
-  alert(added + (added === 1 ? ' Karte' : ' Karten') + ' importiert' + (imgAdded ? ', bei ' + imgAdded + ' vorhandenen Karten Bild ergänzt' : '') + (skipped ? ', ' + skipped + ' doppelte übersprungen' : '') + '.');
+  alert(added + (added === 1 ? ' Karte' : ' Karten') + ' importiert' + (imgAdded ? ', ' + imgAdded + ' vorhandene Karten ergänzt' : '') + (skipped ? ', ' + skipped + ' doppelte übersprungen' : '') + '.');
 }
 document.getElementById('openImportBtn').addEventListener('click', openImport);
 document.getElementById('importCancelBtn').addEventListener('click', closeImport);
@@ -2209,6 +2291,7 @@ ${greenCardsInView().length > 0 ? '<button class="btn-secondary" id="learnResetG
   if(window.clearScratch) clearScratch();
   countEl.textContent = (learnIndex+1) + ' / ' + learnQueue.length;
   answered = false;
+  if(card.table){ renderTableCard(card, body); return; }
   const order = shuffledOptions(card);
 
   body.innerHTML = `
@@ -2243,6 +2326,52 @@ async function selectOption(card, chosenIndex){
     else if(idx === chosenIndex) btn.classList.add('wrong');
   });
 
+  await finishAnswer(card, correct);
+}
+
+function renderTableCard(card, body){
+  const t = card.table;
+  body.innerHTML = `
+    <div class="learn-card${card.image ? ' has-img' : ''}">
+      ${card.image ? `<img class="learn-img" id="learnImg" src="${escapeHtml(imageSrc(card.image))}" alt="Bild zur Frage"><div class="learn-img-hint">Bild antippen zum Vergrößern</div>` : ''}
+      <div class="learn-q">${escapeHtml(card.question)}</div>
+    </div>
+    <div class="tbl-wrap"><table class="learn-table">
+      <thead><tr>${t.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+      <tbody>${t.rows.map((r, ri) => `<tr>${r.cells.map((c, ci) => c.fill
+        ? `<td><select class="tbl-sel" data-r="${ri}" data-c="${ci}"><option value="">– wählen –</option>${tableChoices(t, ci).map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select></td>`
+        : `<td>${escapeHtml(c.text)}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>
+    <div class="tbl-hint" id="tblHint"></div>
+    <button class="learn-continue" id="tblCheck">Prüfen</button>
+  `;
+  const learnImg = document.getElementById('learnImg');
+  if(learnImg){
+    learnImg.addEventListener('click', ()=> openImgViewer(learnImg.src));
+    learnImg.addEventListener('error', ()=>{ learnImg.nextElementSibling.textContent = 'Bild konnte nicht geladen werden (keine Internetverbindung?)'; learnImg.style.display = 'none'; });
+  }
+  document.getElementById('tblCheck').addEventListener('click', async ()=>{
+    if(answered) return;
+    const sels = [...document.querySelectorAll('.tbl-sel')];
+    if(sels.some(s => !s.value)){ document.getElementById('tblHint').textContent = 'Bitte erst alle Felder ausfüllen.'; return; }
+    answered = true;
+    document.getElementById('tblHint').textContent = '';
+    let allOk = true;
+    sels.forEach(s => {
+      const right = t.rows[+s.dataset.r].cells[+s.dataset.c].text;
+      const ok = s.value === right;
+      if(!ok) allOk = false;
+      s.disabled = true;
+      const td = s.parentElement;
+      td.classList.add(ok ? 'correct' : 'wrong');
+      if(!ok){ const sp = document.createElement('span'); sp.className = 'tbl-solution'; sp.textContent = '→ ' + right; td.appendChild(sp); }
+    });
+    document.getElementById('tblCheck').remove();
+    await finishAnswer(card, allOk);
+  });
+}
+
+async function finishAnswer(card, correct){
   const original = cards.find(c=>c.id===card.id);
   original.streak = correct ? Math.min(3, original.streak + 1) : 0;
   await saveCards();
@@ -2705,7 +2834,9 @@ async function importSharedCategory(code, share){
     );
     if(exists){
       const ex = cards.find(e => e.categoryId === target.id && normQ(e.question) === normalized);
-      if(ex && c.image && !ex.image){ ex.image = c.image; added++; } else skipped++;
+      if(ex && c.image && !ex.image){ ex.image = c.image; added++; }
+      else if(ex && c.table && JSON.stringify(ex.table || null) !== JSON.stringify(c.table)){ ex.table = c.table; ex.options = []; ex.correctIndex = -1; added++; }
+      else skipped++;
       return;
     }
     cards.push({
@@ -2715,7 +2846,8 @@ async function importSharedCategory(code, share){
       correctIndex: c.correctIndex,
       streak: 0,
       categoryId: target.id,
-      ...(c.image ? { image: c.image } : {})
+      ...(c.image ? { image: c.image } : {}),
+      ...(c.table ? { table: c.table } : {})
     });
     added++;
   });
