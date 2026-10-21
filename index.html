@@ -1925,7 +1925,7 @@ function parseCalcAnswer(str){
     if(!unit) continue;
     const num = evalCalcNumber(rhs.slice(0, i));
     if(num === null) continue;
-    return { sym: normSym(m[1]), num, unit: unitStr, base: unit.base, value: num * unit.f };
+    return { sym: normSym(m[1]), num, numText: rhs.slice(0, i).trim(), unit: unitStr, base: unit.base, f: unit.f, value: num * unit.f };
   }
   return null;
 }
@@ -1945,9 +1945,18 @@ function checkCalcAnswer(given, expected){
   if(!g) return { ok:false, msg:'So kann ich das nicht lesen – Form: Formelzeichen = Zahl Einheit' };
   if(g.sym !== e.sym) return { ok:false, msg:'Falsches Formelzeichen' };
   if(g.base !== e.base) return { ok:false, msg:'Falsche Einheit' };
-  const tol = Math.max(Math.abs(e.value) * 0.02, 1e-12);
-  if(Math.abs(g.value - e.value) > tol) return { ok:false, msg:'Zahlenwert stimmt nicht' };
-  return { ok:true };
+  const diff = Math.abs(g.value - e.value);
+  // 1) bis 3 % daneben: Rundung irgendwo in der Rechnung (z.B. √3 ≈ 1,73 oder Zwischenergebnis gerundet)
+  if(diff <= Math.max(Math.abs(e.value) * 0.03, 1e-12)) return { ok:true, rounded: diff > Math.abs(e.value) * 1e-6 };
+  // 2) Endergebnis richtig auf die eingegebene Stellenzahl gerundet (mind. 2 gültige Ziffern), z.B. 0,44 statt 0,4348
+  const t = (g.numText || '').replace(/\s/g, '');
+  if(/^-?\d+(?:[.,]\d+)?$/.test(t)){
+    const dec = (t.split(/[.,]/)[1] || '').length;
+    const sig = t.replace(/^-?0*[.,]?0*/, '').replace(/[.,]/, '').length;
+    const expInUserUnit = e.value / g.f;
+    if(sig >= 2 && Math.abs(g.num - expInUserUnit) <= 0.5 * Math.pow(10, -dec) + 1e-9) return { ok:true, rounded:true };
+  }
+  return { ok:false, msg:'Zahlenwert stimmt nicht' };
 }
 function parseCalcLines(lines){
   const subs = [];
@@ -2727,7 +2736,7 @@ function renderCalcCard(card, body){
       const box = inp.closest('.calc-sub'), fb = box.querySelector('.calc-fb');
       const r = checkCalcAnswer(inp.dataset.v, card.calc[i].answer);
       box.classList.add(r.ok ? 'correct' : 'wrong');
-      if(r.ok){ fb.className = 'calc-fb ok'; fb.textContent = '✓ Richtig (' + card.calc[i].answer + ')'; }
+      if(r.ok){ fb.className = 'calc-fb ok'; fb.textContent = '✓ Richtig' + (r.rounded ? ', gerundet' : '') + ' (genau: ' + card.calc[i].answer + ')'; }
       else { allOk = false; fb.className = 'calc-fb bad'; fb.textContent = r.msg + ' → richtig: ' + card.calc[i].answer; }
     });
     document.getElementById('calcCheck').remove();
