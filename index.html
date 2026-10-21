@@ -1671,7 +1671,7 @@ function tableChoices(t, col){
   return [...set].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
 }
 function parseImportText(text){
-  const blocks = text.replace(/\r/g, '').split(/\n\s*\n/).map(b => b.trim()).filter(b => b);
+  const blocks = text.replace(/\r/g, '').replace(/^\s*```.*$/gm, '').split(/\n\s*\n/).map(b => b.trim()).filter(b => b);
   const result = [];
   const problems = [];
   blocks.forEach((block, bi) => {
@@ -1697,6 +1697,8 @@ function parseImportText(text){
         qLines.push(line);
       }
     });
+    // Normaler Begleittext (z.B. versehentlich mitkopierte Chat-Nachricht) ohne Antworten einfach ignorieren
+    if(options.length === 0 && tableHead === null && !image) return;
     const question = qLines.join(' ').trim();
     const label = 'Frage ' + (bi + 1) + (question ? ' ("' + question.slice(0, 30) + '…")' : '');
     if(!question) problems.push(label + ': keine Frage gefunden');
