@@ -203,8 +203,9 @@
   #selectBar.open{display:flex;}
   #selectBar.open{flex-wrap:wrap;}
   #selectCount{flex:0 0 100%;font-size:14px;color:var(--muted);}
-  #selectBar button{flex:1;padding:11px 6px;font-size:14px;}
-  body.selecting #cardList{padding-bottom:130px;}
+  #selectBar button{flex:1 1 30%;padding:11px 6px;font-size:14px;}
+  #selectBar #selectDelete.confirm{background:var(--red);color:#fff;}
+  body.selecting #cardList{padding-bottom:180px;}
   .card.status-rot{border-left-color:var(--red);}
   .card.status-gelb{border-left-color:var(--yellow);}
   .card.status-gruen{border-left-color:var(--green);}
@@ -771,8 +772,10 @@
   <!-- Auswahl-Leiste (Karte lange drücken) -->
   <div id="selectBar">
     <span id="selectCount">1 ausgewählt</span>
+    <button class="btn-secondary" id="selectEdit" type="button">✏️ Bearbeiten</button>
+    <button class="btn-secondary" id="selectReset" type="button">↺ Zurücksetzen</button>
+    <button class="btn-secondary" id="selectDelete" type="button">🗑️ Löschen</button>
     <button class="btn-secondary" id="selectCancel" type="button">Abbrechen</button>
-    <button class="btn-secondary" id="selectEdit" type="button">Bearbeiten</button>
     <button class="btn-primary" id="selectMove" type="button">Verschieben</button>
   </div>
   <div class="sheet-overlay" id="moveOverlay">
@@ -1309,6 +1312,8 @@ function updateSelectUI(){
   const n = selectedCards.size;
   document.getElementById('selectCount').textContent = n + ' ausgewählt';
   document.getElementById('selectEdit').style.display = n === 1 ? '' : 'none';
+  const del = document.getElementById('selectDelete');
+  del.classList.remove('confirm'); del.textContent = '🗑️ Löschen';
 }
 function toggleCardSelect(id){
   if(selectedCards.has(id)) selectedCards.delete(id); else selectedCards.add(id);
@@ -1395,6 +1400,26 @@ function showToast(msg){
   clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 2500);
 }
 document.getElementById('selectCancel').addEventListener('click', exitSelect);
+document.getElementById('selectReset').addEventListener('click', async () => {
+  const n = selectedCards.size;
+  cards.forEach(c => { if(selectedCards.has(c.id)) c.streak = 0; });
+  await saveCards();
+  exitSelect();
+  showToast((n === 1 ? '1 Karte' : n + ' Karten') + ' zurückgesetzt');
+});
+document.getElementById('selectDelete').addEventListener('click', async () => {
+  const btn = document.getElementById('selectDelete');
+  const n = selectedCards.size;
+  if(!btn.classList.contains('confirm')){
+    btn.classList.add('confirm');
+    btn.textContent = 'Wirklich löschen?';
+    return;
+  }
+  cards = cards.filter(c => !selectedCards.has(c.id));
+  await saveCards();
+  exitSelect();
+  showToast((n === 1 ? '1 Karte' : n + ' Karten') + ' gelöscht');
+});
 document.getElementById('selectEdit').addEventListener('click', () => {
   if(selectedCards.size !== 1) return;
   const id = [...selectedCards][0];
