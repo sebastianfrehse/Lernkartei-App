@@ -1916,8 +1916,10 @@ function evalCalcNumber(x){
   try{ const v = Function('"use strict";return (' + t + ')')(); return isFinite(v) ? v : null; }catch(e){ return null; }
 }
 function parseCalcAnswer(str){
-  const m = (str || '').replace(/−/g, '-').match(/^\s*([^=]+?)\s*=\s*(.+?)\s*$/);
-  if(!m) return null;
+  const t0 = (str || '').replace(/−/g, '-');
+  // Formelzeichen ist freiwillig: "0,5 A" geht genauso wie "I = 0,5 A"
+  const m = t0.includes('=') ? t0.match(/^\s*([^=]+?)\s*=\s*(.+?)\s*$/) : [null, '', t0.trim()];
+  if(!m || !m[2]) return null;
   const rhs = m[2];
   for(let i = rhs.length; i >= 1; i--){
     const unitStr = rhs.slice(i).trim();
@@ -1942,8 +1944,8 @@ function calcAnsHtml(v){
 }
 function checkCalcAnswer(given, expected){
   const e = parseCalcAnswer(expected), g = parseCalcAnswer(given);
-  if(!g) return { ok:false, msg:'So kann ich das nicht lesen – Form: Formelzeichen = Zahl Einheit' };
-  if(g.sym !== e.sym) return { ok:false, msg:'Falsches Formelzeichen' };
+  if(!g) return { ok:false, msg:'So kann ich das nicht lesen – Form: Zahl Einheit (z.B. 0,5 A)' };
+  if(g.sym && g.sym !== e.sym) return { ok:false, msg:'Falsches Formelzeichen' };
   if(g.base !== e.base) return { ok:false, msg:'Falsche Einheit' };
   const diff = Math.abs(g.value - e.value);
   // 1) bis 3 % daneben: Rundung irgendwo in der Rechnung (z.B. √3 ≈ 1,73 oder Zwischenergebnis gerundet)
@@ -2710,7 +2712,7 @@ function renderCalcCard(card, body){
     </div>
     ${card.calc.map((x, i) => `<div class="calc-sub" data-i="${i}">
       ${x.text ? `<div class="calc-sub-text">${i + 1}. ${escapeHtml(x.text)}</div>` : ''}
-      <div class="calc-ans" data-v=""><span class="ph">z.B. I = 0,5 A</span></div>
+      <div class="calc-ans" data-v=""><span class="ph">z.B. 0,5 A (oder I = 0,5 A)</span></div>
       <div class="calc-fb"></div>
     </div>`).join('')}
     <div class="tbl-hint" id="tblHint"></div>
@@ -2762,7 +2764,7 @@ function renderCalcCard(card, body){
   const closeFrac = v => fracState(v) === 2 ? v + ']]' : fracState(v) === 1 ? v + '||]]' : v;
   function setVal(v){
     target.dataset.v = v;
-    target.innerHTML = v ? calcAnsHtml(v) + '<span class="cur"></span>' : '<span class="cur"></span><span class="ph">z.B. I = 0,5 A</span>';
+    target.innerHTML = v ? calcAnsHtml(v) + '<span class="cur"></span>' : '<span class="cur"></span><span class="ph">z.B. 0,5 A (oder I = 0,5 A)</span>';
   }
   function put(k){
     if(!target) return;
@@ -2837,7 +2839,7 @@ function renderCalcCard(card, body){
     target = inp; inp.classList.add('kp-active');
     const v = inp.dataset.v || '';
     setVal(v);
-    page = v.includes('=') ? (/(\d|\]\])\s*$/.test(v) ? 'einheit' : 'zahl') : 'zeichen';
+    page = /(\d|\]\])\s*$/.test(v) ? 'einheit' : 'zahl';
     draw();
     kp.classList.add('open');
     requestAnimationFrame(() => inp.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
