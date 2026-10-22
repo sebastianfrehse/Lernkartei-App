@@ -550,6 +550,19 @@
   /* Professor-Figur unten rechts im Hintergrund */
   #profDeco{position:fixed;right:max(0px, calc(50vw - 220px));bottom:0;width:150px;height:200px;opacity:.5;pointer-events:none;z-index:1;}
   header, #cardList{position:relative;z-index:2;}
+  /* Professor ploppt auf, wenn man beim Lernen die Formeln aufmacht */
+  #profPop{position:fixed;right:6px;bottom:0;z-index:60;display:flex;align-items:flex-end;gap:2px;pointer-events:none;
+    transform:translateY(115%);transition:transform .45s cubic-bezier(.2,1.4,.4,1);}
+  #profPop.show{transform:translateY(0);pointer-events:auto;}
+  #profPop .prof-bubble{position:relative;max-width:min(230px,58vw);margin-bottom:120px;background:#fffdf6;color:#1b1d1f;
+    border:3px solid #121212;border-radius:18px;padding:10px 12px;font-size:14.5px;line-height:1.35;font-weight:600;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);}
+  #profPop .prof-bubble::after{content:"";position:absolute;right:-14px;bottom:18px;border:9px solid transparent;
+    border-left:14px solid #121212;border-right:0;}
+  #profPop .prof-bubble small{display:block;margin-top:6px;font-weight:400;font-size:11.5px;color:#6b6f73;}
+  #profPop .prof-fig{width:120px;height:160px;flex:none;}
+  #profPop.show .prof-fig{animation:profWiggle 1.2s ease-in-out .45s 2;}
+  @keyframes profWiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-4deg)}75%{transform:rotate(4deg)}}
   /* Elektro-Rechner */
   #calcScreen{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:25;}
   #calcScreen.open{display:flex;}
@@ -636,6 +649,7 @@
 </head>
 <body>
 <div id="app">
+<div id="profPop" role="status"><div class="prof-bubble" id="profPopText"></div><div class="prof-fig" id="profPopFig"></div></div>
 <div id="profDeco" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%">
 <defs>
 <linearGradient id="coat" x1="0" x2="1"><stop offset="0" stop-color="#f4f6f8"/><stop offset="1" stop-color="#cfd6dc"/></linearGradient>
@@ -3678,11 +3692,45 @@ if('serviceWorker' in navigator){
   }
   function switchTab(t){
     if(t !== 'formulas') hideKeypad();
+    if(t === 'formulas') profCheatWarning();
     document.querySelectorAll('.calc-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     $('calcPane').style.display = t === 'calc' ? 'flex' : 'none';
     $('formulaPane').style.display = t === 'formulas' ? 'block' : 'none';
   }
   document.querySelectorAll('.calc-tab').forEach(b => b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
+  // Professor-Spruch: beim Lernen gleich die Formeln aufmachen = erst mal ins Tabellenbuch!
+  const PROF_SPRUECHE = [
+    'Na na na! Erst mal selber im Tabellenbuch suchen – in der Prüfung gibt\'s auch keinen Spickzettel!',
+    'Moment mal, junger Kollege! Hast du die Formel schon im Tabellenbuch gesucht?',
+    'Ich seh\' genau, was du da machst … Das Tabellenbuch liegt doch direkt neben dir!',
+    'Erst blättern, dann spicken! Was du selbst findest, merkst du dir auch.',
+    'Schummeln ist wie Arbeiten ohne Freischalten – geht gut, bis es knallt. Ab ins Tabellenbuch!',
+    'Formel vergessen? Kein Ding. Aber zuerst Inhaltsverzeichnis, dann Register, dann mich!',
+    'Der Prüfer fragt dich später auch nicht, ob du ’ne App hast. Tabellenbuch auf!',
+    'Ts ts ts … ein echter Elektroniker sucht zuerst selbst. Ich glaub an dich!'
+  ];
+  let profLastCard = null, profTimer = null, profLast = -1;
+  function hideProf(){ $('profPop').classList.remove('show'); clearTimeout(profTimer); }
+  function profCheatWarning(){
+    if(!document.getElementById('learn').classList.contains('open')) return;
+    const card = learnQueue[learnIndex];
+    const key = card ? card.id : 'x';
+    if(key === profLastCard) return; // pro Frage nur einmal meckern
+    profLastCard = key;
+    const fig = $('profPopFig');
+    if(!fig.firstChild){
+      const svg = document.querySelector('#profDeco svg');
+      if(svg) fig.appendChild(svg.cloneNode(true));
+    }
+    let i; do { i = Math.floor(Math.random() * PROF_SPRUECHE.length); } while(i === profLast && PROF_SPRUECHE.length > 1);
+    profLast = i;
+    $('profPopText').innerHTML = escapeHtml(PROF_SPRUECHE[i]) + '<small>Antippen zum Schließen</small>';
+    $('profPop').classList.add('show');
+    clearTimeout(profTimer);
+    profTimer = setTimeout(hideProf, 7000);
+  }
+  $('profPop').addEventListener('click', hideProf);
+
 
   // Eigene Zahlentastatur für die Formel-Felder (statt Handy-Tastatur, die sonst alles verdeckt)
   let activeInput = null;
@@ -3739,6 +3787,7 @@ if('serviceWorker' in navigator){
   };
   window.closeCalc = function(){
     hideKeypad();
+    hideProf();
     $('calcScreen').classList.remove('open');
     $('calcScreen').classList.remove('docked');
     if(window.scratchLive) scratchLive('');
