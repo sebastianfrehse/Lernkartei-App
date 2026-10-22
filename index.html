@@ -559,6 +559,9 @@
     background:#fffdf6;color:#1b1d1f;border:3px solid #121212;border-radius:18px;padding:9px 12px;font-size:15px;font-weight:700;
     box-shadow:0 6px 18px rgba(0,0,0,.35);opacity:0;transform:scale(.6);transform-origin:100% 100%;pointer-events:none;transition:opacity .2s,transform .25s cubic-bezier(.2,1.4,.4,1);}
   #profDecoBubble.show{opacity:1;transform:scale(1);}
+  .prof-hint{position:relative;outline:3px solid var(--copper);outline-offset:3px;border-radius:12px;animation:profHint 1s ease-in-out infinite;}
+  @keyframes profHint{0%,100%{outline-color:var(--copper);box-shadow:0 0 0 0 rgba(201,114,45,.6)}50%{outline-color:#ffcf8a;box-shadow:0 0 0 8px rgba(201,114,45,0)}}
+  #profPop .prof-bubble b{color:#a8541a;}
   #profDecoBubble::after{content:"";position:absolute;right:-14px;bottom:14px;border:9px solid transparent;border-left:14px solid #121212;border-right:0;}
   header, #cardList{position:relative;z-index:2;}
   /* Professor ploppt auf, wenn man beim Lernen die Formeln aufmacht */
@@ -3064,16 +3067,20 @@ function fileToAvatarDataUrl(file){
 
 function openGroupScreen(){
   currentGroupCode = null;
+  document.getElementById('profDecoBubble').classList.remove('show');
+  profClearHint();
   document.getElementById('groupScreen').classList.add('open');
   renderGroupHome();
 }
 function closeGroupScreen(){
   document.getElementById('groupScreen').classList.remove('open');
+  profQuiet();
 }
 
 function renderGroupHome(){
   if(!displayName){
     renderProfileForm();
+    profGuideGroupHome();
     return;
   }
 
@@ -3123,6 +3130,7 @@ function renderGroupHome(){
       wrap.appendChild(item);
     });
   }
+  profGuideGroupHome();
 }
 
 // Dient sowohl der Ersteinrichtung (noch kein Name gesetzt) als auch dem späteren Bearbeiten
@@ -3366,6 +3374,7 @@ async function openGroupDetail(code){
       await openGroupDetail(code);
     });
   });
+  profGuideGroupDetail();
 }
 
 // Auswahl, welche eigene Rubrik in die Gruppe geschickt werden soll
@@ -3493,6 +3502,63 @@ document.getElementById('cancelBtn').addEventListener('click', closeSheet);
 document.getElementById('saveBtn').addEventListener('click', saveSheet);
 document.getElementById('deleteBtn').addEventListener('click', deleteCard);
 document.getElementById('learnBtn').addEventListener('click', startLearning);
+document.getElementById('profPop').addEventListener('click', () => { clearTimeout(profPopTimer); document.getElementById('profPop').classList.remove('show'); });
+// --- Professor als Wegweiser: beim Start nach neuen Fragen fragen und durch das Gruppenmenü führen ---
+let profTour = false;
+function profClearHint(){ document.querySelectorAll('.prof-hint').forEach(el => el.classList.remove('prof-hint')); }
+function profHint(el){ profClearHint(); if(el){ el.classList.add('prof-hint'); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
+let profPopTimer = null;
+function profSay(html, ms){
+  const pop = document.getElementById('profPop'), fig = document.getElementById('profPopFig');
+  if(!fig.firstChild){ const svg = document.querySelector('#profDeco svg'); if(svg) fig.appendChild(svg.cloneNode(true)); }
+  document.getElementById('profPopText').innerHTML = html + '<small>Antippen zum Schließen</small>';
+  pop.classList.remove('show'); void pop.offsetWidth; pop.classList.add('show');
+  clearTimeout(profPopTimer);
+  if(ms) profPopTimer = setTimeout(() => pop.classList.remove('show'), ms);
+}
+function profQuiet(){ clearTimeout(profPopTimer); document.getElementById('profPop').classList.remove('show'); profClearHint(); }
+function profEndTour(){ profTour = false; }
+// Gruppen-Startseite: zur Gruppe lotsen
+function profGuideGroupHome(){
+  if(!profTour) return;
+  if(!displayName){ profSay('Erst mal kurz deinen <b>Namen</b> eintragen und speichern – dann geht\'s weiter zu den Gruppen.'); return; }
+  if(myGroups.length === 0){
+    profSay('Du bist noch in keiner Lerngruppe. Tipp auf <b>„Gruppe beitreten“</b> und gib den Code von deiner Gruppe ein.');
+    profHint(document.getElementById('joinGroupBtn'));
+    return;
+  }
+  const first = document.querySelector('#groupListWrap .group-item');
+  profSay(myGroups.length === 1 ? 'Sehr gut! Jetzt tipp auf <b>deine Gruppe</b>.' : 'Sehr gut! Jetzt tipp auf <b>die Gruppe</b>, deren Fragen du holen willst.');
+  profHint(first);
+}
+// Gruppen-Detail: zum Aktualisieren-Knopf lotsen
+function profGuideGroupDetail(){
+  if(!profTour) return;
+  const btn = document.querySelector('#groupBody [data-import]');
+  if(btn){
+    const isNew = !/Aktualisieren/.test(btn.textContent);
+    profSay(isNew
+      ? 'Hier unten bei <b>„Geteilte Rubriken“</b> gibt\'s eine Rubrik, die du noch nicht hast. Tipp auf <b>„Hinzufügen“</b>!'
+      : 'Da ist er! Bei <b>„Geteilte Rubriken“</b> auf <b>„⟳ Aktualisieren“</b> tippen – dann sind die neuen Fragen bei dir.');
+    profHint(btn);
+  }else{
+    profClearHint();
+    profSay('Alles aktuell – du hast schon alle Fragen! Ab ans Lernen. 💪', 6000);
+    profEndTour();
+  }
+}
+function profStartTour(){
+  if(document.querySelector('#learn.open, #groupScreen.open, #calcScreen.open, .sheet-overlay.open')) return;
+  profTour = true;
+  const bub = document.getElementById('profDecoBubble');
+  bub.innerHTML = 'Moin! Hast du schon die <u>neuen Fragen</u> geholt? Tipp oben rechts auf <b>👥</b> – ich zeig dir dann, wo\'s weitergeht.';
+  bub.classList.add('show');
+  profHint(document.getElementById('groupsBtn'));
+  clearTimeout(window._profStartTimer);
+  window._profStartTimer = setTimeout(() => { bub.classList.remove('show'); if(!document.getElementById('groupScreen').classList.contains('open')) profClearHint(); }, 12000);
+}
+setTimeout(profStartTour, 1200);
+
 // Professor unten rechts antippen
 (function(){
   const prof = document.getElementById('profDeco'), bub = document.getElementById('profDecoBubble');
@@ -3501,6 +3567,7 @@ document.getElementById('learnBtn').addEventListener('click', startLearning);
     bub.textContent = 'Nicht verzagen, Frehse fragen!';
     bub.classList.add('show');
     prof.classList.remove('hop'); void prof.offsetWidth; prof.classList.add('hop');
+    clearTimeout(window._profStartTimer); profClearHint();
     clearTimeout(t); t = setTimeout(() => bub.classList.remove('show'), 3500);
   });
 })();
