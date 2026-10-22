@@ -483,6 +483,16 @@
     border-radius:var(--radius);
     font-size:15px;
   }
+  .learn-skip{margin-top:12px;background:none;border:1px solid var(--line);color:var(--muted);padding:11px;border-radius:var(--radius);font-size:14px;}
+  .learn-card{position:relative;}
+  .learn-help{position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;background:var(--surface2);border:1px solid var(--line);color:var(--copper);font-weight:700;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:1;}
+  .learn-help.has-exp{border-color:var(--copper);}
+  .learn-card .learn-q{padding:0 26px;}
+  #expOverlay{z-index:28;}
+  .exp-text{font-size:15px;line-height:1.65;white-space:normal;}
+  .exp-text .frac{vertical-align:middle;}
+  .exp-q{font-size:13px;color:var(--muted);margin:-8px 0 14px;line-height:1.45;}
+  .exp-empty{font-size:14.5px;line-height:1.6;color:var(--muted);}
   .learn-done{padding:40px 4px 0;color:var(--muted);font-size:14.5px;line-height:1.6;text-align:center;}
   .learn-done-actions{display:flex;flex-direction:column;gap:10px;margin-top:24px;padding:0 4px;}
 
@@ -791,6 +801,10 @@
       <textarea id="tableInput" rows="7"></textarea>
       </div>
 
+      <label class="field-label">Erklärung (optional)</label>
+      <div class="option-hint">Wird angezeigt, wenn man beim Lernen auf das ? tippt. Formeln wie im Rechenfeld: X_L = tiefgestellt, [[Zähler||Nenner]] = Bruch.</div>
+      <textarea id="expInput" rows="5" placeholder="Wie kommt man auf die Antwort?"></textarea>
+
       <div class="form-error" id="formError"></div>
 
       <div class="sheet-actions">
@@ -827,6 +841,7 @@
 <h2 id="catMenuTitle">Rubrik</h2>
 <button class="btn-secondary cat-menu-btn" id="catMenuRename">✏️ Umbenennen</button>
 <button class="btn-secondary cat-menu-btn" id="catMenuReset">↺ Grüne Karten zurücksetzen</button>
+<button class="btn-secondary cat-menu-btn" id="catMenuCopyExp">📋 Fragen ohne Erklärung kopieren</button>
 <button class="btn-secondary cat-menu-btn cat-menu-danger" id="catMenuDelete">🗑️ Rubrik löschen</button>
 <button class="danger-link" id="catMenuClose" style="color:var(--muted);width:100%;">Abbrechen</button>
 </div>
@@ -841,11 +856,24 @@
 <input type="text" id="importNewCategoryInput" placeholder="Name der neuen Rubrik" style="display:none;margin-top:8px;">
 <label class="field-label">Text mit Fragen</label>
 <textarea id="importText" placeholder="Was ist das oberste Ziel einer Unternehmung?&#10;*1) Erwirtschaften von Gewinn&#10;2) ...&#10;3) ...&#10;4) ...&#10;5) ..."></textarea>
-<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen. Optional über der Frage eine Zeile <b>Bild: …</b> mit dem Bildnamen oder Link, dann wird das Bild zur Frage angezeigt. <b>Tabellen-Aufgabe:</b> unter die Frage eine Zeile <b>Tabelle: Kopf1 | Kopf2 | …</b>, darunter je Zeile die Zellen mit | getrennt; Felder zum Ausfüllen bekommen ein * davor (z.B. 1 | *N | *Blau). <b>Rechenaufgabe:</b> unter den Aufgabentext je Teil eine Zeile <b>Teilaufgabe: …</b> und darunter <b>Lösung: I = 0,435 A</b>.</div>
+<div class="import-help">Pro Frage: erst die Frage, darunter die 5 Antworten mit 1) bis 5). Vor die richtige Antwort kommt ein Sternchen, z.B. *3). Zwischen zwei Fragen eine Leerzeile. Fragen, die es schon gibt, werden übersprungen. Optional über der Frage eine Zeile <b>Bild: …</b> mit dem Bildnamen oder Link, dann wird das Bild zur Frage angezeigt. <b>Tabellen-Aufgabe:</b> unter die Frage eine Zeile <b>Tabelle: Kopf1 | Kopf2 | …</b>, darunter je Zeile die Zellen mit | getrennt; Felder zum Ausfüllen bekommen ein * davor (z.B. 1 | *N | *Blau). <b>Rechenaufgabe:</b> unter den Aufgabentext je Teil eine Zeile <b>Teilaufgabe: …</b> und darunter <b>Lösung: I = 0,435 A</b>. <b>Erklärung:</b> als letzte Zeile(n) der Frage eine Zeile <b>Erklärung: …</b> – die wird beim ? angezeigt. Gibt es die Frage schon, wird nur die Erklärung nachgetragen.</div>
 <div class="form-error" id="importError"></div>
 <div class="sheet-actions">
 <button class="btn-secondary" id="importCancelBtn">Abbrechen</button>
 <button class="btn-primary" id="importConfirmBtn">Importieren</button>
+</div>
+</div>
+</div>
+
+<!-- Erklärung zur Frage (?-Knopf beim Lernen) -->
+<div class="sheet-overlay" id="expOverlay">
+<div class="sheet">
+<h2>So kommt man drauf</h2>
+<div class="exp-q" id="expQ"></div>
+<div id="expBody"></div>
+<div class="sheet-actions" style="margin-top:18px;">
+<button class="btn-secondary" id="expCopyBtn" style="display:none;">📋 Frage kopieren</button>
+<button class="btn-primary" id="expCloseBtn">Verstanden</button>
 </div>
 </div>
 </div>
@@ -1059,6 +1087,7 @@ function buildShareCards(cat){
     if(c.image) o.image = c.image;
     if(c.table) o.table = c.table;
     if(c.calc) o.calc = c.calc;
+    if(c.explanation) o.explanation = c.explanation;
     return o;
   });
   let droppedPhotos = 0;
@@ -1074,7 +1103,7 @@ function shareDiffers(sh, cat){
   const theirs = sh.cards || [];
   if(mine.length !== theirs.length) return true;
   const set = new Map(theirs.map(c => [normQ(c.question), c]));
-  return mine.some(c => { const t = set.get(normQ(c.question)); return !t || t.correctIndex !== c.correctIndex || (t.image || '') !== (c.image || '') || JSON.stringify(t.table || null) !== JSON.stringify(c.table || null) || JSON.stringify(t.calc || null) !== JSON.stringify(c.calc || null) || JSON.stringify(t.options) !== JSON.stringify(c.options); });
+  return mine.some(c => { const t = set.get(normQ(c.question)); return !t || t.correctIndex !== c.correctIndex || (t.image || '') !== (c.image || '') || JSON.stringify(t.table || null) !== JSON.stringify(c.table || null) || JSON.stringify(t.calc || null) !== JSON.stringify(c.calc || null) || (t.explanation || '') !== (c.explanation || '') || JSON.stringify(t.options) !== JSON.stringify(c.options); });
 }
 // Eigene geteilte Rubriken automatisch auf den neuesten Stand bringen
 async function syncMyShares(onlyCode){
@@ -1585,6 +1614,13 @@ document.getElementById('catMenuDelete').addEventListener('click', async ()=>{
   closeCategoryMenu();
   render();
 });
+document.getElementById('catMenuCopyExp').addEventListener('click', async ()=>{
+  const list = cards.filter(c => c.categoryId === catMenuId && !c.explanation);
+  if(!list.length){ showToast('Alle Fragen in dieser Rubrik haben schon eine Erklärung'); return; }
+  const ok = await copyText('Bitte schreib zu diesen Fragen jeweils eine Erklärung (Erklärung-Zeile für den Import):\n\n' + list.map(cardToImportText).join('\n\n'));
+  closeCategoryMenu();
+  showToast(ok ? list.length + (list.length === 1 ? ' Frage' : ' Fragen') + ' kopiert – jetzt im Chat einfügen' : 'Kopieren hat nicht geklappt');
+});
 document.getElementById('catMenuClose').addEventListener('click', closeCategoryMenu);
 
 document.getElementById('categoryCancelBtn').addEventListener('click', closeCategoryOverlay);
@@ -1653,6 +1689,7 @@ function openAdd(){
   showTableSection(null);
   showCalcSection(null);
   setSheetImage('');
+  document.getElementById('expInput').value = '';
   document.getElementById('sheetOverlay').classList.add('open');
 }
 
@@ -1674,6 +1711,7 @@ function openEdit(id){
   showTableSection(card.table || null);
   showCalcSection(card.calc || null);
   setSheetImage(card.image || '');
+  document.getElementById('expInput').value = card.explanation || '';
   document.getElementById('sheetOverlay').classList.add('open');
 }
 
@@ -1754,6 +1792,7 @@ async function saveSheet(){
   warningEl.textContent = '';
 
   const correctIndex = (isTable || isCalc) ? -1 : parseInt(checked.value, 10);
+  const explanation = document.getElementById('expInput').value.replace(/\r/g, '').trim();
 
   let categoryId = catSelectValue;
   if(catSelectValue === '__new__'){
@@ -1779,9 +1818,11 @@ async function saveSheet(){
     }
     card.categoryId = categoryId;
     if(sheetImage) card.image = sheetImage; else delete card.image;
+    if(explanation) card.explanation = explanation; else delete card.explanation;
   }else{
     const newCard = {id: Date.now().toString(36), question:q, options, correctIndex, streak:0, categoryId};
     if(sheetImage) newCard.image = sheetImage;
+    if(explanation) newCard.explanation = explanation;
     cards.push(newCard);
   }
   if(!(await saveCards())){
@@ -1991,7 +2032,12 @@ function parseImportText(text){
     let tableHead = null;
     const tableLines = [];
     const calcLines = [];
+    const expLines = [];
     block.split('\n').map(l => l.trim()).filter(l => l).forEach(line => {
+      // Erklärung: steht am Ende, alle Zeilen danach gehören dazu
+      const em = line.match(/^erkl(?:ä|ae)rung\s*:\s*(.*)$/i);
+      if(em && !expLines.length){ expLines.push(em[1]); return; }
+      if(expLines.length){ expLines.push(line); return; }
       const im = line.match(/^bild\s*:\s*(\S+)\s*$/i);
       if(im){ image = im[1]; return; }
       if(/^(teilaufgabe|l(ö|oe)sung)\s*:/i.test(line) || calcLines.length){ calcLines.push(line); return; }
@@ -2026,6 +2072,8 @@ function parseImportText(text){
     else if(options.length !== NUM_OPTIONS) problems.push(label + ': ' + options.length + ' statt 5 Antworten');
     else if(correctIndex === null) problems.push(label + ': keine richtige Antwort mit * markiert');
     else result.push({ question, options, correctIndex, image });
+    const explanation = expLines.join('\n').trim();
+    if(explanation && result.length && result[result.length - 1].question === question) result[result.length - 1].explanation = explanation;
   });
   return { result, problems };
 }
@@ -2047,15 +2095,17 @@ async function importCards(){
   const norm = s => s.replace(/\s+/g, ' ').trim().toLowerCase();
   const existing = new Set(cards.map(c => norm(c.question)));
   let added = 0, skipped = 0;
-  let imgAdded = 0;
+  let imgAdded = 0, expAdded = 0;
   result.forEach((r, i) => {
     if(existing.has(norm(r.question))){
       // Frage gibt es schon: falls sie noch kein Bild hat, Bild nachtragen
       const ex = cards.find(c => norm(c.question) === norm(r.question));
-      if(r.image && ex && !ex.image){ ex.image = r.image; imgAdded++; }
-      else if(r.table && ex && JSON.stringify(ex.table || null) !== JSON.stringify(r.table)){ ex.table = r.table; ex.options = []; ex.correctIndex = -1; imgAdded++; }
-      else if(r.calc && ex && JSON.stringify(ex.calc || null) !== JSON.stringify(r.calc)){ ex.calc = r.calc; ex.options = []; ex.correctIndex = -1; imgAdded++; }
-      else skipped++;
+      let changed = false;
+      if(r.image && ex && !ex.image){ ex.image = r.image; changed = true; }
+      if(r.table && ex && JSON.stringify(ex.table || null) !== JSON.stringify(r.table)){ ex.table = r.table; ex.options = []; ex.correctIndex = -1; changed = true; }
+      if(r.calc && ex && JSON.stringify(ex.calc || null) !== JSON.stringify(r.calc)){ ex.calc = r.calc; ex.options = []; ex.correctIndex = -1; changed = true; }
+      if(r.explanation && ex && ex.explanation !== r.explanation){ ex.explanation = r.explanation; changed = true; expAdded++; }
+      if(changed) imgAdded++; else skipped++;
       return;
     }
     existing.add(norm(r.question));
@@ -2063,6 +2113,7 @@ async function importCards(){
     if(r.image) nc.image = r.image;
     if(r.table) nc.table = r.table;
     if(r.calc) nc.calc = r.calc;
+    if(r.explanation) nc.explanation = r.explanation;
     cards.push(nc);
     added++;
   });
@@ -2070,7 +2121,7 @@ async function importCards(){
   selectedCategoryId = categoryId;
   closeImport();
   render();
-  alert(added + (added === 1 ? ' Karte' : ' Karten') + ' importiert' + (imgAdded ? ', ' + imgAdded + ' vorhandene Karten ergänzt' : '') + (skipped ? ', ' + skipped + ' doppelte übersprungen' : '') + '.');
+  alert(added + (added === 1 ? ' Karte' : ' Karten') + ' importiert' + (imgAdded ? ', ' + imgAdded + ' vorhandene Karten ergänzt' + (expAdded ? ' (' + expAdded + ' mit Erklärung)' : '') : '') + (skipped ? ', ' + skipped + ' doppelte übersprungen' : '') + '.');
 }
 document.getElementById('openImportBtn').addEventListener('click', openImport);
 document.getElementById('importCancelBtn').addEventListener('click', closeImport);
@@ -2557,6 +2608,7 @@ function startLearning(){
     .sort((a, b) => statusRank[statusOf(a)] - statusRank[statusOf(b)]);
   learnIndex = 0;
   answered = false;
+  skippedIds = new Set();
   document.getElementById('learn').classList.add('open');
   renderLearnCard();
 }
@@ -2628,20 +2680,13 @@ ${greenCardsInView().length > 0 ? '<button class="btn-secondary" id="learnResetG
   const order = shuffledOptions(card);
 
   body.innerHTML = `
-    <div class="learn-card${card.image ? ' has-img' : ''}">
-      ${card.image ? `<img class="learn-img" id="learnImg" src="${escapeHtml(imageSrc(card.image))}" alt="Bild zur Frage"><div class="learn-img-hint">Bild antippen zum Vergrößern</div>` : ''}
-      <div class="learn-q">${escapeHtml(card.question)}</div>
-    </div>
+    ${learnCardHtml(card)}
     <div class="learn-options" id="learnOptions">
       ${order.map(opt => `<button class="learn-option" data-index="${opt.i}">${escapeHtml(opt.text)}</button>`).join('')}
     </div>
   `;
 
-  const learnImg = document.getElementById('learnImg');
-  if(learnImg){
-    learnImg.addEventListener('click', ()=> openImgViewer(learnImg.src));
-    learnImg.addEventListener('error', ()=>{ learnImg.nextElementSibling.textContent = 'Bild konnte nicht geladen werden (keine Internetverbindung?)'; learnImg.style.display = 'none'; });
-  }
+  wireLearnCard(card, body);
 
   document.querySelectorAll('.learn-option').forEach(btn=>{
     btn.addEventListener('click', ()=> selectOption(card, parseInt(btn.dataset.index,10)));
@@ -2665,10 +2710,7 @@ async function selectOption(card, chosenIndex){
 function renderTableCard(card, body){
   const t = card.table;
   body.innerHTML = `
-    <div class="learn-card${card.image ? ' has-img' : ''}">
-      ${card.image ? `<img class="learn-img" id="learnImg" src="${escapeHtml(imageSrc(card.image))}" alt="Bild zur Frage"><div class="learn-img-hint">Bild antippen zum Vergrößern</div>` : ''}
-      <div class="learn-q">${escapeHtml(card.question)}</div>
-    </div>
+    ${learnCardHtml(card)}
     <div class="tbl-wrap"><table class="learn-table">
       <thead><tr>${t.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
       <tbody>${t.rows.map((r, ri) => `<tr>${r.cells.map((c, ci) => c.fill
@@ -2678,11 +2720,7 @@ function renderTableCard(card, body){
     <div class="tbl-hint" id="tblHint"></div>
     <button class="learn-continue" id="tblCheck">Prüfen</button>
   `;
-  const learnImg = document.getElementById('learnImg');
-  if(learnImg){
-    learnImg.addEventListener('click', ()=> openImgViewer(learnImg.src));
-    learnImg.addEventListener('error', ()=>{ learnImg.nextElementSibling.textContent = 'Bild konnte nicht geladen werden (keine Internetverbindung?)'; learnImg.style.display = 'none'; });
-  }
+  wireLearnCard(card, body);
   document.getElementById('tblCheck').addEventListener('click', async ()=>{
     if(answered) return;
     const sels = [...document.querySelectorAll('.tbl-sel')];
@@ -2706,10 +2744,7 @@ function renderTableCard(card, body){
 
 function renderCalcCard(card, body){
   body.innerHTML = `
-    <div class="learn-card${card.image ? ' has-img' : ''}">
-      ${card.image ? `<img class="learn-img" id="learnImg" src="${escapeHtml(imageSrc(card.image))}" alt="Bild zur Frage"><div class="learn-img-hint">Bild antippen zum Vergrößern</div>` : ''}
-      <div class="learn-q">${escapeHtml(card.question)}</div>
-    </div>
+    ${learnCardHtml(card)}
     ${card.calc.map((x, i) => `<div class="calc-sub" data-i="${i}">
       ${x.text ? `<div class="calc-sub-text">${i + 1}. ${escapeHtml(x.text)}</div>` : ''}
       <div class="calc-ans" data-v=""><span class="ph">z.B. 0,5 A (oder I = 0,5 A)</span></div>
@@ -2718,11 +2753,7 @@ function renderCalcCard(card, body){
     <div class="tbl-hint" id="tblHint"></div>
     <button class="learn-continue" id="calcCheck">Prüfen</button>
   `;
-  const learnImg = document.getElementById('learnImg');
-  if(learnImg){
-    learnImg.addEventListener('click', ()=> openImgViewer(learnImg.src));
-    learnImg.addEventListener('error', ()=>{ learnImg.nextElementSibling.textContent = 'Bild konnte nicht geladen werden (keine Internetverbindung?)'; learnImg.style.display = 'none'; });
-  }
+  wireLearnCard(card, body);
   body.querySelectorAll('.calc-ans').forEach(inp => inp.addEventListener('click', () => { if(!answered) showAnsKp(inp); }));
   const first = body.querySelector('.calc-ans');
   if(first) showAnsKp(first);
@@ -2850,6 +2881,87 @@ function renderCalcCard(card, body){
   };
 })();
 
+// Fragekasten oben (Bild, Frage, ?-Knopf für die Erklärung)
+function learnCardHtml(card){
+  return `<div class="learn-card${card.image ? ' has-img' : ''}">
+      <button class="learn-help${card.explanation ? ' has-exp' : ''}" id="learnHelp" type="button" title="Wie kommt man auf die Antwort?">?</button>
+      ${card.image ? `<img class="learn-img" id="learnImg" src="${escapeHtml(imageSrc(card.image))}" alt="Bild zur Frage"><div class="learn-img-hint">Bild antippen zum Vergrößern</div>` : ''}
+      <div class="learn-q">${escapeHtml(card.question)}</div>
+    </div>`;
+}
+function wireLearnCard(card, body){
+  const learnImg = document.getElementById('learnImg');
+  if(learnImg){
+    learnImg.addEventListener('click', ()=> openImgViewer(learnImg.src));
+    learnImg.addEventListener('error', ()=>{ learnImg.nextElementSibling.textContent = 'Bild konnte nicht geladen werden (keine Internetverbindung?)'; learnImg.style.display = 'none'; });
+  }
+  document.getElementById('learnHelp').addEventListener('click', ()=> openExplanation(card));
+  const skip = document.createElement('button');
+  skip.className = 'learn-skip'; skip.id = 'learnSkip'; skip.type = 'button';
+  skip.textContent = 'Überspringen ⏭';
+  skip.addEventListener('click', ()=> skipCard(card));
+  body.appendChild(skip);
+}
+// Überspringen: Karte kommt am Ende der Runde nochmal (einmal), zählt weder richtig noch falsch
+let skippedIds = new Set();
+function skipCard(card){
+  if(answered) return;
+  if(window.hideAnsKp) hideAnsKp();
+  if(!skippedIds.has(card.id) && learnQueue.length - learnIndex > 1){
+    skippedIds.add(card.id);
+    learnQueue.splice(learnIndex, 1);
+    learnQueue.push(card);
+  }else{
+    learnIndex++;
+  }
+  renderLearnCard();
+}
+// Karte als Import-Text (so wie Claude ihn schreibt) – zum Kopieren und Erklärung holen
+function cardToImportText(c){
+  const lines = [];
+  if(c.image && !c.image.startsWith('data:')) lines.push('Bild: ' + c.image);
+  lines.push(c.question);
+  if(c.calc) lines.push(calcToText(c.calc));
+  else if(c.table) lines.push('Tabelle: ' + tableToText(c.table));
+  else (c.options || []).forEach((o, i) => lines.push((i === c.correctIndex ? '*' : '') + (i + 1) + ') ' + o));
+  if(c.explanation) lines.push('Erklärung: ' + c.explanation);
+  return lines.join('\n');
+}
+async function copyText(text){
+  try{ await navigator.clipboard.writeText(text); return true; }
+  catch(e){
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try{ ok = document.execCommand('copy'); }catch(_){}
+    ta.remove(); return ok;
+  }
+}
+function explanationHtml(text){
+  return text.split('\n').map(l => l.trim() ? calcAnsHtml(l) : '').join('<br>');
+}
+let expCard = null;
+function openExplanation(card){
+  expCard = cards.find(c => c.id === card.id) || card;
+  document.getElementById('expQ').textContent = expCard.question;
+  const bodyEl = document.getElementById('expBody');
+  const copyBtn = document.getElementById('expCopyBtn');
+  if(expCard.explanation){
+    bodyEl.innerHTML = '<div class="exp-text">' + explanationHtml(expCard.explanation) + '</div>';
+    copyBtn.style.display = 'none';
+  }else{
+    bodyEl.innerHTML = '<div class="exp-empty">Für diese Frage ist noch keine Erklärung hinterlegt.<br><br>Tipp auf <b>„Frage kopieren“</b> und schick sie Claude im Chat. Den Text, den du zurückbekommst, einfach bei <b>„Karten importieren“</b> einfügen – dann ist die Erklärung hier drin.</div>';
+    copyBtn.style.display = '';
+  }
+  document.getElementById('expOverlay').classList.add('open');
+}
+document.getElementById('expCloseBtn').addEventListener('click', ()=> document.getElementById('expOverlay').classList.remove('open'));
+document.getElementById('expOverlay').addEventListener('click', e => { if(e.target.id === 'expOverlay') e.target.classList.remove('open'); });
+document.getElementById('expCopyBtn').addEventListener('click', async ()=>{
+  if(!expCard) return;
+  const ok = await copyText('Bitte erklär mir, wie man auf die Antwort kommt (mit Erklärung-Zeile für den Import):\n\n' + cardToImportText(expCard));
+  showToast(ok ? 'Frage kopiert – jetzt im Chat einfügen' : 'Kopieren hat nicht geklappt');
+});
+
 async function finishAnswer(card, correct){
   const original = cards.find(c=>c.id===card.id);
   original.streak = correct ? Math.min(3, original.streak + 1) : 0;
@@ -2857,12 +2969,13 @@ async function finishAnswer(card, correct){
   render();
 
   if(!correct){
-    // Falsch beantwortet: Karte bald nochmal in dieser Runde einstreuen statt bis zum nächsten Durchgang zu warten
-    const reinsertAt = Math.min(learnQueue.length, learnIndex + 4);
-    learnQueue.splice(reinsertAt, 0, card);
+    // Falsch beantwortet: Karte erst ganz am Schluss nochmal, wenn alle anderen Fragen durch sind
+    learnQueue.push(card);
   }
 
   const body = document.getElementById('learnBody');
+  const skipBtn = document.getElementById('learnSkip');
+  if(skipBtn) skipBtn.remove();
   const btn = document.createElement('button');
   btn.className = 'learn-continue';
   btn.textContent = 'Weiter';
@@ -3314,10 +3427,12 @@ async function importSharedCategory(code, share){
     );
     if(exists){
       const ex = cards.find(e => e.categoryId === target.id && normQ(e.question) === normalized);
-      if(ex && c.image && !ex.image){ ex.image = c.image; added++; }
-      else if(ex && c.table && JSON.stringify(ex.table || null) !== JSON.stringify(c.table)){ ex.table = c.table; ex.options = []; ex.correctIndex = -1; added++; }
-      else if(ex && c.calc && JSON.stringify(ex.calc || null) !== JSON.stringify(c.calc)){ ex.calc = c.calc; ex.options = []; ex.correctIndex = -1; added++; }
-      else skipped++;
+      let changed = false;
+      if(ex && c.image && !ex.image){ ex.image = c.image; changed = true; }
+      if(ex && c.table && JSON.stringify(ex.table || null) !== JSON.stringify(c.table)){ ex.table = c.table; ex.options = []; ex.correctIndex = -1; changed = true; }
+      if(ex && c.calc && JSON.stringify(ex.calc || null) !== JSON.stringify(c.calc)){ ex.calc = c.calc; ex.options = []; ex.correctIndex = -1; changed = true; }
+      if(ex && c.explanation && ex.explanation !== c.explanation){ ex.explanation = c.explanation; changed = true; }
+      if(changed) added++; else skipped++;
       return;
     }
     cards.push({
@@ -3329,7 +3444,8 @@ async function importSharedCategory(code, share){
       categoryId: target.id,
       ...(c.image ? { image: c.image } : {}),
       ...(c.table ? { table: c.table } : {}),
-      ...(c.calc ? { calc: c.calc } : {})
+      ...(c.calc ? { calc: c.calc } : {}),
+      ...(c.explanation ? { explanation: c.explanation } : {})
     });
     added++;
   });
