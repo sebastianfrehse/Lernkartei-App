@@ -387,8 +387,11 @@
   body:has(#groupScreen.open) .fab-row,
   body:has(#cropScreen.open) .fab-row,
   body:has(#calcScreen.open) .fab-row{display:none;}
+  body:has(.sheet-overlay.open) #profDeco, body:has(#groupScreen.open) #profDeco, body:has(#cropScreen.open) #profDeco,
+  body:has(#calcScreen.open) #profDeco, body:has(#learn.open) #profDeco, body.selecting #profDeco,
+  body:has(.sheet-overlay.open) #profDecoBubble, body:has(#learn.open) #profDecoBubble, body:has(#calcScreen.open) #profDecoBubble{display:none;}
   /* Platz unter der Kartenliste, damit die letzten Karten nicht unter den Knöpfen liegen */
-  #cardList{padding-bottom:140px;}
+  #cardList{padding-bottom:230px;}
   .learn-top{
     padding:18px 20px 10px;
     display:flex;align-items:center;justify-content:space-between;
@@ -548,7 +551,15 @@
     padding:14px 20px calc(14px + env(safe-area-inset-bottom));
   }
   /* Professor-Figur unten rechts im Hintergrund */
-  #profDeco{position:fixed;right:max(0px, calc(50vw - 220px));bottom:0;width:150px;height:200px;opacity:.5;pointer-events:none;z-index:1;}
+  #profDeco{position:fixed;right:max(0px, calc(50vw - 220px));bottom:0;width:150px;height:200px;z-index:11;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;transform-origin:50% 100%;}
+  #profDeco.hop{animation:profHop .5s ease-out;}
+  @keyframes profHop{0%,100%{transform:translateY(0)}40%{transform:translateY(-14px) rotate(-3deg)}}
+  #profDecoBubble{position:fixed;right:calc(max(0px, calc(50vw - 220px)) + 128px);bottom:150px;z-index:11;max-width:min(210px,55vw);
+    background:#fffdf6;color:#1b1d1f;border:3px solid #121212;border-radius:18px;padding:9px 12px;font-size:15px;font-weight:700;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);opacity:0;transform:scale(.6);transform-origin:100% 100%;pointer-events:none;transition:opacity .2s,transform .25s cubic-bezier(.2,1.4,.4,1);}
+  #profDecoBubble.show{opacity:1;transform:scale(1);}
+  #profDecoBubble::after{content:"";position:absolute;right:-14px;bottom:14px;border:9px solid transparent;border-left:14px solid #121212;border-right:0;}
   header, #cardList{position:relative;z-index:2;}
   /* Professor ploppt auf, wenn man beim Lernen die Formeln aufmacht */
   #profPop{position:fixed;right:6px;bottom:0;z-index:60;display:flex;align-items:flex-end;gap:2px;pointer-events:none;
@@ -650,7 +661,8 @@
 <body>
 <div id="app">
 <div id="profPop" role="status"><div class="prof-bubble" id="profPopText"></div><div class="prof-fig" id="profPopFig"></div></div>
-<div id="profDeco" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%">
+<div id="profDecoBubble" role="status"></div>
+<div id="profDeco" title="Professor Frehse"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%">
 <defs>
 <linearGradient id="coat" x1="0" x2="1"><stop offset="0" stop-color="#f4f6f8"/><stop offset="1" stop-color="#cfd6dc"/></linearGradient>
 <radialGradient id="glow"><stop offset="0" stop-color="#ffe27a" stop-opacity=".9"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient>
@@ -3481,6 +3493,17 @@ document.getElementById('cancelBtn').addEventListener('click', closeSheet);
 document.getElementById('saveBtn').addEventListener('click', saveSheet);
 document.getElementById('deleteBtn').addEventListener('click', deleteCard);
 document.getElementById('learnBtn').addEventListener('click', startLearning);
+// Professor unten rechts antippen
+(function(){
+  const prof = document.getElementById('profDeco'), bub = document.getElementById('profDecoBubble');
+  let t = null;
+  prof.addEventListener('click', () => {
+    bub.textContent = 'Nicht verzagen, Frehse fragen!';
+    bub.classList.add('show');
+    prof.classList.remove('hop'); void prof.offsetWidth; prof.classList.add('hop');
+    clearTimeout(t); t = setTimeout(() => bub.classList.remove('show'), 3500);
+  });
+})();
 document.getElementById('learnClose').addEventListener('click', closeLearning);
 
 loadCards();
