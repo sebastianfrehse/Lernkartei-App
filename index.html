@@ -3378,11 +3378,12 @@ async function openGroupDetail(code){
       const localQs = new Set(cards.filter(c => local && c.categoryId === local.id).map(c => normQ(c.question)));
       const newCount = (s.cards || []).filter(c => !localQs.has(normQ(c.question))).length;
       const imgCount = local ? (s.cards || []).filter(c => c.image && cards.some(x => x.categoryId === local.id && normQ(x.question) === normQ(c.question) && !x.image)).length : 0;
+      const remCount = isMine ? 0 : shareRemovals(code, s, shared).length;
       const when = s.updatedAt ? ' · aktualisiert ' + new Date(s.updatedAt).toLocaleDateString('de-DE') : '';
       let btn;
       if(isMine) btn = `<span class="group-item-code" style="color:var(--green);">✓ deine</span>`;
       else if(!local) btn = `<button class="btn-secondary" style="padding:8px 12px;font-size:13px;" data-import="${s.id}">Hinzufügen</button>`;
-      else if(newCount > 0 || imgCount > 0) btn = `<button class="btn-primary" style="padding:8px 12px;font-size:13px;flex:none;" data-import="${s.id}">⟳ Aktualisieren (${newCount + imgCount} neu)</button>`;
+      else if(newCount > 0 || imgCount > 0 || remCount > 0) btn = `<button class="btn-primary" style="padding:8px 12px;font-size:13px;flex:none;" data-import="${s.id}">⟳ Aktualisieren (${[newCount + imgCount > 0 ? (newCount + imgCount) + ' neu' : '', remCount > 0 ? remCount + ' raus' : ''].filter(Boolean).join(', ')})</button>`;
       else btn = `<span class="group-item-code" style="color:var(--green);">✓ aktuell</span>`;
       html += `
         <div class="group-item">
@@ -3494,6 +3495,29 @@ function renderShareCategoryForm(code){
 }
 
 // Geteilte Rubrik bei sich selbst hinzufügen
+// Welche Fragen hat der Ersteller aus seiner geteilten Rubrik verschoben oder gelöscht?
+// Verschoben = steht jetzt in einer anderen geteilten Rubrik der Gruppe; gelöscht = war früher drin und ist jetzt weg.
+// Eigene Fragen, die nie in der geteilten Rubrik waren, bleiben unangetastet.
+const shareSeenKey = (code, id) => 'shareSeen:' + code + ':' + id;
+function getShareSeen(code, id){ try{ return new Set(JSON.parse(localGet(shareSeenKey(code, id)) || '[]')); }catch(e){ return new Set(); } }
+function setShareSeen(code, share){ localSet(shareSeenKey(code, share.id), JSON.stringify((share.cards || []).map(c => normQ(c.question)))); }
+function shareRemovals(code, share, allShared){
+  const local = categories.find(c => c.name.toLowerCase() === (share.name || '').toLowerCase());
+  if(!local) return [];
+  const qs = new Set((share.cards || []).map(c => normQ(c.question)));
+  const seen = getShareSeen(code, share.id);
+  const out = [];
+  cards.filter(c => c.categoryId === local.id && !qs.has(normQ(c.question))).forEach(c => {
+    const q = normQ(c.question);
+    const other = (allShared || []).find(sh => sh.id !== share.id && (sh.cards || []).some(x => normQ(x.question) === q));
+    if(other){
+      const otherLocal = categories.find(x => x.name.toLowerCase() === (other.name || '').toLowerCase());
+      const dup = otherLocal && cards.some(x => x !== c && x.categoryId === otherLocal.id && normQ(x.question) === q);
+      out.push({ card: c, moveTo: otherLocal && !dup ? otherLocal.id : null });
+    }else if(seen.has(q)) out.push({ card: c, moveTo: null });
+  });
+  return out;
+}
 async function importSharedCategory(code, share){
   if(!share) return;
   const statusEl = document.getElementById('shareStatus');
@@ -3507,7 +3531,14 @@ async function importSharedCategory(code, share){
     await saveCategories();
   }
 
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, removed = 0;
+  const allShared = await getSharedCategories(code);
+  // 1) Verschobene/gelöschte Fragen aus dieser Rubrik rausnehmen (verschobene behalten ihren Fortschritt)
+  shareRemovals(code, share, allShared).forEach(r => {
+    if(r.moveTo) r.card.categoryId = r.moveTo;
+    else cards = cards.filter(x => x !== r.card);
+    removed++;
+  });
   (share.cards || []).forEach((c, i) => {
     const normalized = (c.question || '').replace(/\s+/g, ' ').trim().toLowerCase();
     const exists = cards.some(existing =>
@@ -3524,6 +3555,13 @@ async function importSharedCategory(code, share){
       if(changed) added++; else skipped++;
       return;
     }
+    // 2) Frage wurde hierher verschoben und liegt bei mir noch in der alten Rubrik? Dann mitsamt Fortschritt rüberholen
+    const moved = cards.find(x => x.categoryId !== target.id && normQ(x.question) === normalized && (() => {
+      const oc = categories.find(k => k.id === x.categoryId);
+      const os = oc && allShared.find(sh => sh.id !== share.id && (sh.name || '').toLowerCase() === oc.name.toLowerCase());
+      return os && !(os.cards || []).some(y => normQ(y.question) === normalized);
+    })());
+    if(moved){ moved.categoryId = target.id; added++; return; }
     cards.push({
       id: Date.now().toString(36) + '-' + i,
       question: c.question,
@@ -3539,11 +3577,12 @@ async function importSharedCategory(code, share){
     added++;
   });
 
+  setShareSeen(code, share);
   await saveCards();
   render();
 
   if(statusEl){
-    statusEl.textContent = `${added} Karte(n) zu "${target.name}" hinzugefügt` + (skipped > 0 ? `, ${skipped} bereits vorhanden.` : '.');
+    statusEl.textContent = `${added} Karte(n) zu "${target.name}" hinzugefügt` + (removed > 0 ? `, ${removed} verschoben/entfernt` : '') + (skipped > 0 ? `, ${skipped} bereits vorhanden.` : '.');
   }
 }
 
