@@ -399,6 +399,7 @@
   .learn-close{color:var(--muted);font-size:14px;background:none;}
   .learn-top{gap:6px;padding-left:12px;padding-right:12px;}
   .learn-top button, .learn-count{white-space:nowrap;}
+  #learnDelBtn.confirm{background:#c0392b;border-color:#c0392b;color:#fff;}
   .learn-count{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--muted);}
   .learn-body{
     flex:1;display:flex;flex-direction:column;
@@ -939,9 +940,10 @@
       <div style="display:flex;gap:6px;align-items:center;">
         <button class="learn-close" id="learnClose">✕ Schließen</button>
         <button class="learn-calc" id="learnMoveBtn" type="button" title="Frage in andere Rubrik verschieben">📁</button>
+        <button class="learn-calc" id="learnDelBtn" type="button" title="Frage löschen">🗑️</button>
       </div>
       <div style="display:flex;gap:6px;">
-        <button class="learn-calc" id="scratchBtn" type="button">✏️ Nebenrechnung</button>
+        <button class="learn-calc" id="scratchBtn" type="button" title="Nebenrechnung">✏️</button>
         <button class="learn-calc" id="learnCalcBtn" type="button">🧮</button>
       </div>
       <span class="learn-count" id="learnCount"></span>
@@ -1532,6 +1534,29 @@ document.getElementById('selectEdit').addEventListener('click', () => {
   openEdit(id);
 });
 document.getElementById('selectMove').addEventListener('click', () => openMoveSheet());
+// Frage im Lernmodus löschen (zweimal tippen)
+let learnDelTimer = null;
+function resetLearnDel(){
+  const b = document.getElementById('learnDelBtn');
+  clearTimeout(learnDelTimer);
+  b.classList.remove('confirm');
+}
+document.getElementById('learnDelBtn').addEventListener('click', async () => {
+  const b = document.getElementById('learnDelBtn');
+  const card = learnQueue[learnIndex];
+  if(!card) return;
+  if(!b.classList.contains('confirm')){
+    b.classList.add('confirm'); showToast('Nochmal auf 🗑️ tippen zum Löschen');
+    clearTimeout(learnDelTimer); learnDelTimer = setTimeout(resetLearnDel, 3000);
+    return;
+  }
+  cards = cards.filter(c => c.id !== card.id);
+  learnQueue.splice(learnIndex, 1);
+  await saveCards();
+  render();
+  renderLearnCard();
+  showToast('Frage gelöscht');
+});
 document.getElementById('learnMoveBtn').addEventListener('click', () => {
   const card = learnQueue[learnIndex];
   if(card) openMoveSheet([card.id]);
@@ -2682,6 +2707,8 @@ function renderLearnCard(){
   const body = document.getElementById('learnBody');
   const countEl = document.getElementById('learnCount');
   document.getElementById('learnMoveBtn').style.display = learnIndex < learnQueue.length ? '' : 'none';
+  document.getElementById('learnDelBtn').style.display = learnIndex < learnQueue.length ? '' : 'none';
+  resetLearnDel();
 
   if(learnQueue.length === 0){
     countEl.textContent = '';
@@ -3579,9 +3606,13 @@ setTimeout(profStartTour, 1200);
 // Professor unten rechts antippen
 (function(){
   const prof = document.getElementById('profDeco'), bub = document.getElementById('profDecoBubble');
-  let t = null;
+  let t = null, n = 0, idle = null;
+  // Sprüche beim Antippen – wird frecher, je öfter man hintereinander tippt
+  const sprueche = ['Nicht verzagen, Frehse fragen!', 'Hey!', 'Lass das!', 'Fick dich! Lass das!'];
   prof.addEventListener('click', () => {
-    bub.textContent = 'Nicht verzagen, Frehse fragen!';
+    bub.textContent = sprueche[Math.min(n, sprueche.length - 1)];
+    n++;
+    clearTimeout(idle); idle = setTimeout(() => { n = 0; }, 6000);
     bub.classList.add('show');
     prof.classList.remove('hop'); void prof.offsetWidth; prof.classList.add('hop');
     clearTimeout(window._profStartTimer); profClearHint();
