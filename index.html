@@ -1493,6 +1493,13 @@ async function moveSelectedTo(catId){
   moveIds = null;
   if(!fromLearn){ selectedCards.clear(); updateSelectUI(); }
   render();
+  // Im Lernmodus: verschobene Frage raus aus der Runde, direkt mit der nächsten weiter
+  if(fromLearn && moved){
+    const left = learnQueue.filter(c => !targets.has(c.id));
+    const before = learnQueue.slice(0, learnIndex).filter(c => !targets.has(c.id)).length;
+    learnQueue = left; learnIndex = before;
+    renderLearnCard();
+  }
   const cat = categories.find(c => c.id === catId);
   showToast((moved === 1 ? '1 Karte' : moved + ' Karten') + ' nach „' + (cat ? cat.name : '') + '“ verschoben');
 }
