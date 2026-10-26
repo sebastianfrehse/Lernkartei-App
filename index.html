@@ -3601,11 +3601,31 @@ function profGuideGroupDetail(){
     profEndTour();
   }
 }
-function profStartTour(){
+// Gibt es in einer meiner Gruppen geteilte Fragen, die ich noch nicht habe?
+async function hasNewSharedQuestions(){
+  if(!myGroups.length || typeof db === 'undefined') return false;
+  for(const g of myGroups){
+    const shared = await getSharedCategories(g.code);
+    for(const sh of shared){
+      if(isMyShare(sh)) continue;
+      const local = categories.find(c => c.name.toLowerCase() === (sh.name || '').toLowerCase());
+      if(!local) return true;
+      const mine = cards.filter(c => c.categoryId === local.id);
+      const qs = new Set(mine.map(c => normQ(c.question)));
+      if((sh.cards || []).some(c => !qs.has(normQ(c.question)))) return true;
+      if((sh.cards || []).some(c => c.image && mine.some(x => normQ(x.question) === normQ(c.question) && !x.image))) return true;
+    }
+  }
+  return false;
+}
+async function profStartTour(){
+  let news = false;
+  try{ news = await hasNewSharedQuestions(); }catch(e){ news = false; }
+  if(!news) return; // nur melden, wenn wirklich neue Fragen online sind
   if(document.querySelector('#learn.open, #groupScreen.open, #calcScreen.open, .sheet-overlay.open')) return;
   profTour = true;
   const bub = document.getElementById('profDecoBubble');
-  bub.innerHTML = 'Moin! Hast du schon die <u>neuen Fragen</u> geholt? Tipp oben rechts auf <b>👥</b> – ich zeig dir dann, wo\'s weitergeht.';
+  bub.innerHTML = 'Hey, es sind <u>neue Fragen online</u>! Tipp oben rechts auf <b>👥</b> – ich zeig dir dann, wo\'s weitergeht.';
   bub.classList.add('show');
   profHint(document.getElementById('groupsBtn'));
   clearTimeout(window._profStartTimer);
