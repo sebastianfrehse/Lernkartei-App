@@ -397,6 +397,8 @@
     display:flex;align-items:center;justify-content:space-between;
   }
   .learn-close{color:var(--muted);font-size:14px;background:none;}
+  .learn-top{gap:6px;padding-left:12px;padding-right:12px;}
+  .learn-top button, .learn-count{white-space:nowrap;}
   .learn-count{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--muted);}
   .learn-body{
     flex:1;display:flex;flex-direction:column;
@@ -934,7 +936,10 @@
   <!-- Lern-Modus -->
   <div id="learn">
     <div class="learn-top">
-      <button class="learn-close" id="learnClose">✕ Schließen</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="learn-close" id="learnClose">✕ Schließen</button>
+        <button class="learn-calc" id="learnMoveBtn" type="button" title="Frage in andere Rubrik verschieben">📁</button>
+      </div>
       <div style="display:flex;gap:6px;">
         <button class="learn-calc" id="scratchBtn" type="button">✏️ Nebenrechnung</button>
         <button class="learn-calc" id="learnCalcBtn" type="button">🧮</button>
@@ -1438,13 +1443,18 @@ function attachCardPress(el, id){
     if(selecting()) toggleCardSelect(id); else startLearningAt(id);
   });
 }
-function openMoveSheet(){
-  if(!selecting()) return;
-  const n = selectedCards.size;
-  document.getElementById('moveTitle').textContent = (n === 1 ? '1 Karte' : n + ' Karten') + ' verschieben nach …';
+// moveIds: Karten, die aus dem Lernmodus verschoben werden (sonst die Auswahl)
+let moveIds = null;
+function moveTargets(){ return moveIds ? new Set(moveIds) : selectedCards; }
+function openMoveSheet(ids){
+  moveIds = Array.isArray(ids) ? ids : null;
+  if(!moveIds && !selecting()) return;
+  const targets = moveTargets();
+  const n = targets.size;
+  document.getElementById('moveTitle').textContent = moveIds ? 'Frage verschieben nach …' : (n === 1 ? '1 Karte' : n + ' Karten') + ' verschieben nach …';
   const list = document.getElementById('moveList');
   list.innerHTML = '';
-  const sel = cards.filter(c => selectedCards.has(c.id));
+  const sel = cards.filter(c => targets.has(c.id));
   categories.forEach(cat => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -1473,11 +1483,13 @@ function openMoveSheet(){
 function closeMoveSheet(){ document.getElementById('moveOverlay').classList.remove('open'); }
 async function moveSelectedTo(catId){
   let moved = 0;
-  cards.forEach(c => { if(selectedCards.has(c.id) && c.categoryId !== catId){ c.categoryId = catId; moved++; } });
+  const targets = moveTargets();
+  const fromLearn = !!moveIds;
+  cards.forEach(c => { if(targets.has(c.id) && c.categoryId !== catId){ c.categoryId = catId; moved++; } });
   await saveCards();
   closeMoveSheet();
-  selectedCards.clear();
-  updateSelectUI();
+  moveIds = null;
+  if(!fromLearn){ selectedCards.clear(); updateSelectUI(); }
   render();
   const cat = categories.find(c => c.id === catId);
   showToast((moved === 1 ? '1 Karte' : moved + ' Karten') + ' nach „' + (cat ? cat.name : '') + '“ verschoben');
@@ -1519,7 +1531,11 @@ document.getElementById('selectEdit').addEventListener('click', () => {
   exitSelect();
   openEdit(id);
 });
-document.getElementById('selectMove').addEventListener('click', openMoveSheet);
+document.getElementById('selectMove').addEventListener('click', () => openMoveSheet());
+document.getElementById('learnMoveBtn').addEventListener('click', () => {
+  const card = learnQueue[learnIndex];
+  if(card) openMoveSheet([card.id]);
+});
 document.getElementById('moveClose').addEventListener('click', closeMoveSheet);
 document.getElementById('moveNewConfirm').addEventListener('click', async () => {
   const name = document.getElementById('moveNewName').value.trim();
@@ -2665,6 +2681,7 @@ function shuffledOptions(card){
 function renderLearnCard(){
   const body = document.getElementById('learnBody');
   const countEl = document.getElementById('learnCount');
+  document.getElementById('learnMoveBtn').style.display = learnIndex < learnQueue.length ? '' : 'none';
 
   if(learnQueue.length === 0){
     countEl.textContent = '';
