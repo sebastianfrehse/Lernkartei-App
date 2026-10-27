@@ -560,6 +560,10 @@
   #profDeco{position:fixed;right:max(0px, calc(50vw - 220px));bottom:0;width:150px;height:200px;z-index:11;cursor:pointer;
     -webkit-tap-highlight-color:transparent;transform-origin:50% 100%;}
   #profDeco.hop{animation:profHop .5s ease-out;}
+  /* Nur die gemalte Figur fängt Taps ab, nicht der leere Kasten drumherum (sonst sind Karten/Knöpfe dahinter blockiert) */
+  #profDeco{pointer-events:none;}
+  #profDeco svg *{pointer-events:visiblePainted;}
+  #profDeco svg [fill-opacity], #profDeco svg [opacity]{pointer-events:none;}
   @keyframes profHop{0%,100%{transform:translateY(0)}40%{transform:translateY(-14px) rotate(-3deg)}}
   #profDecoBubble{position:fixed;right:calc(max(0px, calc(50vw - 220px)) + 128px);bottom:150px;z-index:11;max-width:min(210px,55vw);
     background:#fffdf6;color:#1b1d1f;border:3px solid #121212;border-radius:18px;padding:9px 12px;font-size:15px;font-weight:700;
