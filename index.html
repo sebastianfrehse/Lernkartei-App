@@ -389,7 +389,21 @@
   body:has(.sheet-overlay.open) .fab-row,
   body:has(#groupScreen.open) .fab-row,
   body:has(#cropScreen.open) .fab-row,
-  body:has(#calcScreen.open) .fab-row{display:none;}
+  body:has(#calcScreen.open) .fab-row,
+  body:has(#rulesScreen.open) .fab-row{display:none;}
+  body:has(#rulesScreen.open) #profDeco, body:has(#rulesScreen.open) #profDecoBubble{display:none;}
+  #rulesScreen{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:15;}
+  #rulesScreen.open{display:flex;}
+  .rules-intro{color:var(--muted, #9aa0a6);font-size:13px;margin:0 0 12px;}
+  .rules-item{margin:0 0 18px;}
+  .rules-item h3{font-size:15px;margin:0 0 6px;color:var(--text, #eee);}
+  .rules-item img{display:block;width:100%;height:auto;border-radius:8px;background:#fff;cursor:zoom-in;box-shadow:0 2px 10px rgba(0,0,0,.35);}
+  #rulesZoom{position:fixed;inset:0;z-index:40;background:#111;display:none;overflow:auto;-webkit-overflow-scrolling:touch;}
+  #rulesZoom.open{display:block;}
+  #rulesZoom img{display:block;width:240%;max-width:none;height:auto;background:#fff;}
+  #rulesZoom .rules-zoom-close{position:fixed;top:calc(10px + env(safe-area-inset-top));right:12px;z-index:41;background:rgba(0,0,0,.7);color:#fff;border:1px solid #666;border-radius:10px;padding:8px 12px;font-size:15px;}
+  #rulesZoom .rules-zoom-bar{position:fixed;bottom:calc(12px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:41;display:flex;gap:8px;}
+  #rulesZoom .rules-zoom-bar button{background:rgba(0,0,0,.7);color:#fff;border:1px solid #666;border-radius:10px;padding:8px 16px;font-size:18px;}
   body:has(.sheet-overlay.open) #profDeco, body:has(#groupScreen.open) #profDeco, body:has(#cropScreen.open) #profDeco,
   body:has(#calcScreen.open) #profDeco, body:has(#learn.open) #profDeco, body.selecting #profDeco,
   body:has(.sheet-overlay.open) #profDecoBubble, body:has(#learn.open) #profDecoBubble, body:has(#calcScreen.open) #profDecoBubble{display:none;}
@@ -799,6 +813,7 @@
       <h1>Lernkartei</h1>
       <div style="display:flex;gap:8px;">
         <button class="header-icon-btn" id="calcBtn" title="Rechner">🧮</button>
+        <button class="header-icon-btn" id="rulesBtn" title="Prüfungsregeln">📋</button>
         <button class="header-icon-btn" id="groupsBtn">👥</button>
       </div>
     </div>
@@ -957,6 +972,16 @@
       <button class="danger-link" id="categoryDeleteBtn" style="display:none;">Rubrik löschen</button>
     </div>
   </div>
+
+  <!-- Prüfungsregeln -->
+  <div id="rulesScreen">
+    <div class="learn-top">
+      <button class="learn-close" id="rulesClose">✕ Schließen</button>
+      <span class="learn-count">Prüfungsregeln</span>
+    </div>
+    <div class="learn-body" id="rulesBody"></div>
+  </div>
+  <div id="rulesZoom"><button class="rules-zoom-close" id="rulesZoomClose" type="button">✕ Zurück</button><img id="rulesZoomImg" alt=""><div class="rules-zoom-bar"><button type="button" id="rulesZoomOut">−</button><button type="button" id="rulesZoomIn">+</button></div></div>
 
   <!-- Lerngruppen -->
   <div id="groupScreen">
@@ -3673,6 +3698,39 @@ async function importSharedCategory(code, share){
 }
 
 document.getElementById('groupsBtn').addEventListener('click', openGroupScreen);
+// Prüfungsregeln: Blätter der IHK zum Nachlesen (Industrieelektriker/-in Betriebstechnik)
+const RULE_SHEETS = [
+  ['Prüfungsübersicht (Termine, Struktur, Gewichtung, Hilfsmittel)', 'bilder/regeln-1-pruefungsuebersicht.jpg'],
+  ['Gliederung der Abschlussprüfung', 'bilder/regeln-2-gliederung.jpg'],
+  ['Hinweise Teil A (gebundene Aufgaben)', 'bilder/regeln-3-hinweise-teil-a.jpg'],
+  ['Muster eines Markierungsbogens', 'bilder/regeln-4-markierungsbogen.jpg'],
+  ['Hinweise Teil B (ungebundene Aufgaben)', 'bilder/regeln-5-hinweise-teil-b.jpg'],
+  ['Bewertung der Prüfungsleistungen', 'bilder/regeln-6-bewertung.jpg']
+];
+(function(){
+  const scr = document.getElementById('rulesScreen'), body = document.getElementById('rulesBody');
+  const zoom = document.getElementById('rulesZoom'), zimg = document.getElementById('rulesZoomImg');
+  let zw = 240;
+  body.innerHTML = '<p class="rules-intro">Tippe ein Blatt an, um es groß anzuschauen.</p>' +
+    RULE_SHEETS.map(([t, src]) => `<div class="rules-item"><h3>${escapeHtml(t)}</h3><img loading="lazy" src="${src}" alt="${escapeHtml(t)}"></div>`).join('');
+  document.getElementById('rulesBtn').addEventListener('click', () => {
+    document.getElementById('profDecoBubble').classList.remove('show');
+    profClearHint();
+    scr.classList.add('open');
+  });
+  document.getElementById('rulesClose').addEventListener('click', () => scr.classList.remove('open'));
+  body.addEventListener('click', e => {
+    const im = e.target.closest('.rules-item img'); if(!im) return;
+    zw = im.naturalWidth > im.naturalHeight ? 300 : 240;
+    zimg.style.width = zw + '%'; zimg.src = im.src; zoom.classList.add('open'); zoom.scrollTo(0, 0);
+  });
+  const setZ = f => { const cx = (zoom.scrollLeft + zoom.clientWidth / 2) / zoom.scrollWidth, cy = (zoom.scrollTop + zoom.clientHeight / 2) / zoom.scrollHeight;
+    zw = Math.max(100, Math.min(500, zw * f)); zimg.style.width = zw + '%';
+    zoom.scrollLeft = cx * zoom.scrollWidth - zoom.clientWidth / 2; zoom.scrollTop = cy * zoom.scrollHeight - zoom.clientHeight / 2; };
+  document.getElementById('rulesZoomIn').addEventListener('click', () => setZ(1.3));
+  document.getElementById('rulesZoomOut').addEventListener('click', () => setZ(1 / 1.3));
+  document.getElementById('rulesZoomClose').addEventListener('click', () => zoom.classList.remove('open'));
+})();
 document.getElementById('groupClose').addEventListener('click', closeGroupScreen);
 
 // --- Events ---
