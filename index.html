@@ -1280,6 +1280,10 @@ function statusOf(card){
   return 'rot';
 }
 
+// Text wie im Tabellenbuch: Z_S → Z mit tiefgestelltem S (in Fragen, Antworten, Tabellen)
+function subHtml(str){
+  return escapeHtml(str).replace(/([A-Za-zηφκγρΔ])_([A-Za-z0-9Δ]+)/g, '$1<sub>$2</sub>');
+}
 function escapeHtml(str){
   const d = document.createElement('div');
   d.textContent = str;
@@ -1409,7 +1413,7 @@ function render(){
     el.className = 'card status-' + status + (selectedCards.has(card.id) ? ' selected' : '');
     el.innerHTML = `
       <div class="sel-box">${selectedCards.has(card.id) ? '✓' : ''}</div>
-      <div class="card-q">${card.table ? '<span class="card-img-tag">▦</span>' : ''}${card.calc ? '<span class="card-img-tag">🧮</span>' : ''}${card.image ? '<span class="card-img-tag">🖼️</span>' : ''}${escapeHtml(card.question)}</div>
+      <div class="card-q">${card.table ? '<span class="card-img-tag">▦</span>' : ''}${card.calc ? '<span class="card-img-tag">🧮</span>' : ''}${card.image ? '<span class="card-img-tag">🖼️</span>' : ''}${subHtml(card.question)}</div>
       <div class="leds">
         ${[0,1,2].map(i => `<div class="led ${i < card.streak ? 'on-'+status : ''}"></div>`).join('')}
       </div>
@@ -2778,7 +2782,7 @@ ${greenCardsInView().length > 0 ? '<button class="btn-secondary" id="learnResetG
   body.innerHTML = `
     ${learnCardHtml(card)}
     <div class="learn-options" id="learnOptions">
-      ${order.map(opt => `<button class="learn-option" data-index="${opt.i}">${escapeHtml(opt.text)}</button>`).join('')}
+      ${order.map(opt => `<button class="learn-option" data-index="${opt.i}">${subHtml(opt.text)}</button>`).join('')}
     </div>
   `;
 
@@ -2808,10 +2812,10 @@ function renderTableCard(card, body){
   body.innerHTML = `
     ${learnCardHtml(card)}
     <div class="tbl-wrap"><table class="learn-table">
-      <thead><tr>${t.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+      <thead><tr>${t.headers.map(h => `<th>${subHtml(h)}</th>`).join('')}</tr></thead>
       <tbody>${t.rows.map((r, ri) => `<tr>${r.cells.map((c, ci) => c.fill
         ? `<td><select class="tbl-sel" data-r="${ri}" data-c="${ci}"><option value="">– wählen –</option>${tableChoices(t, ci).map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select></td>`
-        : `<td>${escapeHtml(c.text)}</td>`).join('')}</tr>`).join('')}</tbody>
+        : `<td>${subHtml(c.text)}</td>`).join('')}</tr>`).join('')}</tbody>
     </table></div>
     <div class="tbl-hint" id="tblHint"></div>
     <button class="learn-continue" id="tblCheck">Prüfen</button>
@@ -2842,7 +2846,7 @@ function renderCalcCard(card, body){
   body.innerHTML = `
     ${learnCardHtml(card)}
     ${card.calc.map((x, i) => `<div class="calc-sub" data-i="${i}">
-      ${x.text ? `<div class="calc-sub-text">${i + 1}. ${escapeHtml(x.text)}</div>` : ''}
+      ${x.text ? `<div class="calc-sub-text">${i + 1}. ${subHtml(x.text)}</div>` : ''}
       <div class="calc-ans" data-v=""><span class="ph">z.B. 0,5 A (oder I = 0,5 A)</span></div>
       <div class="calc-fb"></div>
     </div>`).join('')}
@@ -2982,7 +2986,7 @@ function learnCardHtml(card){
   return `<div class="learn-card${card.image ? ' has-img' : ''}">
       <button class="learn-help${card.explanation ? ' has-exp' : ''}" id="learnHelp" type="button" title="Wie kommt man auf die Antwort?">?</button>
       ${card.image ? `<img class="learn-img" id="learnImg" src="${escapeHtml(imageSrc(card.image))}" alt="Bild zur Frage"><div class="learn-img-hint">Bild antippen zum Vergrößern</div>` : ''}
-      <div class="learn-q">${escapeHtml(card.question)}</div>
+      <div class="learn-q">${subHtml(card.question)}</div>
     </div>`;
 }
 function wireLearnCard(card, body){
@@ -3038,7 +3042,7 @@ function explanationHtml(text){
 let expCard = null;
 function openExplanation(card){
   expCard = cards.find(c => c.id === card.id) || card;
-  document.getElementById('expQ').textContent = expCard.question;
+  document.getElementById('expQ').innerHTML = subHtml(expCard.question);
   const bodyEl = document.getElementById('expBody');
   const copyBtn = document.getElementById('expCopyBtn');
   if(expCard.explanation){
