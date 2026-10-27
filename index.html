@@ -575,6 +575,15 @@
   #profDecoBubble::after{content:"";position:absolute;right:-14px;bottom:14px;border:9px solid transparent;border-left:14px solid #121212;border-right:0;}
   header, #cardList{position:relative;z-index:2;}
   /* Professor haut gegen den Bildschirm (10x antippen) */
+  .learn-table.cross{width:100%;table-layout:fixed;font-size:12.5px;}
+  .learn-table.cross th, .learn-table.cross td{padding:6px 4px;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:anywhere;line-height:1.25;}
+  .learn-table.cross th:first-child, .learn-table.cross td:first-child{width:34%;text-align:left;}
+  .learn-table td.tbl-x{cursor:pointer;text-align:center;vertical-align:middle;-webkit-tap-highlight-color:transparent;}
+  .tbl-xbox{display:inline-block;width:26px;height:26px;border:2px solid var(--muted, #8a8f94);border-radius:6px;position:relative;vertical-align:middle;}
+  .tbl-x.on .tbl-xbox::before, .tbl-x.missed .tbl-xbox::before{content:"✗";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--copper, #c9722d);line-height:1;}
+  .tbl-x.missed .tbl-xbox::before{opacity:.45;}
+  .tbl-x.correct .tbl-xbox{border-color:var(--green);}
+  .tbl-x.wrong .tbl-xbox{border-color:var(--red);}
   #profFist{position:fixed;left:0;top:0;width:170px;height:170px;z-index:60;pointer-events:none;display:none;will-change:transform;}
   #profCracks{position:fixed;inset:0;width:100vw;height:100vh;z-index:59;pointer-events:none;}
   #profFlash{position:fixed;inset:0;z-index:58;pointer-events:none;background:#fff;opacity:0;}
@@ -2828,8 +2837,15 @@ async function selectOption(card, chosenIndex){
   await finishAnswer(card, correct);
 }
 
+// Ankreuz-Tabelle: alle Felder zum Ausfüllen sind X (ankreuzen) oder - (leer lassen)
+const isCrossX = v => /^[xX✗]$/.test((v || '').trim());
+function isCrossTable(t){
+  const f = []; t.rows.forEach(r => r.cells.forEach(c => { if(c.fill) f.push(c.text.trim()); }));
+  return f.length > 0 && f.some(isCrossX) && f.every(v => isCrossX(v) || /^[-–—]$/.test(v));
+}
 function renderTableCard(card, body){
   const t = card.table;
+  if(isCrossTable(t)) return renderCrossTableCard(card, body);
   body.innerHTML = `
     ${learnCardHtml(card)}
     <div class="tbl-wrap"><table class="learn-table">
@@ -2857,6 +2873,38 @@ function renderTableCard(card, body){
       const td = s.parentElement;
       td.classList.add(ok ? 'correct' : 'wrong');
       if(!ok){ const sp = document.createElement('span'); sp.className = 'tbl-solution'; sp.textContent = '→ ' + right; td.appendChild(sp); }
+    });
+    document.getElementById('tblCheck').remove();
+    await finishAnswer(card, allOk);
+  });
+}
+
+function renderCrossTableCard(card, body){
+  const t = card.table;
+  body.innerHTML = `
+    ${learnCardHtml(card)}
+    <div class="tbl-hint" style="margin-bottom:6px;">Tippe die Felder an, die angekreuzt werden müssen.</div>
+    <div class="tbl-wrap"><table class="learn-table cross" lang="de">
+      <thead><tr>${t.headers.map(h => `<th>${subHtml(h)}</th>`).join('')}</tr></thead>
+      <tbody>${t.rows.map((r, ri) => `<tr>${r.cells.map((c, ci) => c.fill
+        ? `<td class="tbl-x" data-r="${ri}" data-c="${ci}"><span class="tbl-xbox"></span></td>`
+        : `<td>${subHtml(c.text)}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>
+    <div class="tbl-hint" id="tblHint"></div>
+    <button class="learn-continue" id="tblCheck">Prüfen</button>
+  `;
+  wireLearnCard(card, body);
+  const boxes = [...body.querySelectorAll('.tbl-x')];
+  boxes.forEach(td => td.addEventListener('click', () => { if(!answered) td.classList.toggle('on'); }));
+  document.getElementById('tblCheck').addEventListener('click', async ()=>{
+    if(answered) return;
+    answered = true;
+    let allOk = true;
+    boxes.forEach(td => {
+      const should = isCrossX(t.rows[+td.dataset.r].cells[+td.dataset.c].text);
+      const on = td.classList.contains('on');
+      if(on === should){ if(on) td.classList.add('correct'); }
+      else { allOk = false; td.classList.add('wrong'); if(should) td.classList.add('missed'); }
     });
     document.getElementById('tblCheck').remove();
     await finishAnswer(card, allOk);
@@ -3941,11 +3989,13 @@ if('serviceWorker' in navigator){
     {n:'Leiterstrom Dreieckschaltung', f:'I = √3 · I_Str', o:'I', u:'A', i:[['s','Strangstrom I_Str (= U / R)','A']], c:v=>Math.sqrt(3)*v.s},
     {n:'Strangstrom Dreieckschaltung (z.B. Motorschutz bei Stern-Dreieck)', f:'I_Str = I / √3', o:'I_Str', u:'A', i:[['I','Leiterstrom I (Leistungsschild)','A']], c:v=>v.I/Math.sqrt(3)},
     {n:'Anlaufstrom', f:'I_A = k · I_N', o:'I_A', u:'A', i:[['k','Faktor k (I_A / I_N)',''],['I','Bemessungsstrom I_N','A']], c:v=>v.k*v.I},
+    {n:'Strom Drehstrom-Verbraucher (mit cos φ)', f:'I = P / (√3 · U · cos φ)', o:'I', u:'A', i:[['P','Leistung P','W'],['U','Spannung U','V','400'],['c','cos φ','','1']], c:v=>v.P/(Math.sqrt(3)*v.U*v.c)},
     {n:'Strom Wechselstrom-Verbraucher', f:'I = P / (U · cos φ)', o:'I', u:'A', i:[['P','Leistung P','W'],['U','Spannung U','V','230'],['c','cos φ','','1']], c:v=>v.P/(v.U*v.c)},
     {n:'Synchrondrehzahl', f:'n_s = f · 60 / p', o:'n_s', u:'1/min', i:[['f','Frequenz f','Hz','50'],['p','Polpaare p (Pole ÷ 2)','']], c:v=>v.f*60/v.p},
     {n:'Läuferdrehzahl aus Schlupf', f:'n = f · 60 / p · (1 − s / 100 %)', o:'n', u:'1/min', i:[['f','Frequenz f','Hz','50'],['p','Polpaare p (Pole ÷ 2)',''],['s','Schlupf s','%']], c:v=>v.f*60/v.p*(1-v.s/100)},
     {n:'Polpaare aus Drehzahl', f:'p = f · 60 / n_s', o:'p', u:'', i:[['f','Frequenz f','Hz','50'],['n','Synchrondrehzahl n_s (z.B. 1000)','1/min']], c:v=>v.f*60/v.n},
     {n:'Schlupf', f:'s = (n_s − n) / n_s · 100', o:'s', u:'%', i:[['a','Synchrondrehzahl n_s','1/min'],['b','Läuferdrehzahl n','1/min']], c:v=>(v.a-v.b)/v.a*100},
+    {n:'Spannungsfall aus Prozent', f:'ΔU = U · Δu / 100 %', o:'ΔU', u:'V', i:[['U','Netzspannung U','V','400'],['p','zulässiger Spannungsfall Δu in %','','3']], c:v=>v.U*v.p/100},
     {n:'Spannungsfall Wechselstrom', f:'ΔU = 2 · l · I · cos φ / (γ · A)', o:'ΔU', u:'V', i:[['l','Länge l','m'],['I','Strom I','A'],['c','cos φ','','1'],['k','γ','m/Ωmm²','56'],['A','Querschnitt A','mm²']], c:v=>2*v.l*v.I*v.c/(v.k*v.A)},
     {n:'Spannungsfall Drehstrom', f:'ΔU = √3 · l · I · cos φ / (γ · A)', o:'ΔU', u:'V', i:[['l','Länge l','m'],['I','Strom I','A'],['c','cos φ','','1'],['k','γ','m/Ωmm²','56'],['A','Querschnitt A','mm²']], c:v=>Math.sqrt(3)*v.l*v.I*v.c/(v.k*v.A)},
     {n:'Leiterquerschnitt aus Spannungsfall (Wechselstrom)', f:'A = 2 · l · I · cos φ / (γ · ΔU)', o:'A', u:'mm²', i:[['l','Länge l','m'],['I','Strom I','A'],['c','cos φ','','1'],['k','γ','m/Ωmm²','56'],['d','ΔU (z.B. 3 % von 230 V = 6,9)','V']], c:v=>2*v.l*v.I*v.c/(v.k*v.d)},
@@ -3971,7 +4021,7 @@ if('serviceWorker' in navigator){
       .replace(/(^|[^A-Za-z])([A-Z])(\d)(?!\d)/g, '$1$2<sub>$3</sub>');
   }
   // Brüche wie auf Papier: Zähler oben, Bruchstrich, Nenner unten
-  const FH = {"Schleifenimpedanz (TN-System, Abschaltstrom)": "Z_S = [[U_0||I_a]]", "Schleifenimpedanz mit RCD": "Z_S = [[U_L||I_Δn]]", "Ohmsches Gesetz – Strom": "I = [[U||R]]", "Ohmsches Gesetz – Widerstand": "R = [[U||I]]", "Parallelschaltung": "[[1||R]] = [[1||R1]] + [[1||R2]] (+ [[1||R3]])", "Leitungswiderstand (Hin + Rück)": "R = [[2 · l||γ · A]]", "Wirkungsgrad": "η = [[P_ab||P_zu]]", "Motorstrom aus dem Netz": "I = [[P||√3 · U · cos φ · η]]", "Strom Wechselstrom-Verbraucher": "I = [[P||U · cos φ]]", "Synchrondrehzahl": "n_s = [[f · 60||p]]", "Läuferdrehzahl aus Schlupf": "n = [[f · 60||p]] · (1 − [[s||100 %]])", "Schlupf": "s = [[n_s − n||n_s]] · 100 %", "Polpaare aus Drehzahl": "p = [[f · 60||n_s]]", "Strom Drehstrom (ohmsche Last)": "I = [[P||√3 · U]]", "Spannungsfall Wechselstrom": "ΔU = [[2 · l · I · cos φ||γ · A]]", "Spannungsfall Drehstrom": "ΔU = [[√3 · l · I · cos φ||γ · A]]", "Frequenz aus Periodendauer": "f = [[1||T]]", "Effektivwert": "U = [[û||√2]]", "Kapazitiver Blindwiderstand": "X_C = [[1||2 · π · f · C]]", "Trafo Übersetzung": "U_2 = U_1 · [[N_2||N_1]]", "Leiterquerschnitt aus Widerstand": "A = [[2 · l||γ · R]]", "Leiterquerschnitt aus Durchmesser": "A = [[π · d²||4]]", "Innenwiderstand Spannungsquelle": "R_i = [[U_0 − U_K||I]]", "Klemmenspannung Spannungsquelle": "U_K = [[U_0 · R||R_i + R]]", "Strangspannung Sternschaltung": "U_Str = [[U||√3]]", "Strangstrom Dreieckschaltung (z.B. Motorschutz bei Stern-Dreieck)": "I_Str = [[I||√3]]", "Vorwiderstand LED": "R_V = [[U − U_F||I_F]]", "Leiterquerschnitt aus Spannungsfall (Wechselstrom)": "A = [[2 · l · I · cos φ||γ · ΔU]]", "Leiterquerschnitt aus Spannungsfall (Drehstrom)": "A = [[√3 · l · I · cos φ||γ · ΔU]]", "Leitungslänge aus Spannungsfall (Wechselstrom)": "l = [[ΔU · γ · A||2 · I · cos φ]]", "Leitungslänge aus Spannungsfall (Drehstrom)": "l = [[ΔU · γ · A||√3 · I · cos φ]]"};
+  const FH = {"Strom Drehstrom-Verbraucher (mit cos φ)": "I = [[P||√3 · U · cos φ]]", "Spannungsfall aus Prozent": "ΔU = [[U · Δu||100 %]]", "Schleifenimpedanz (TN-System, Abschaltstrom)": "Z_S = [[U_0||I_a]]", "Schleifenimpedanz mit RCD": "Z_S = [[U_L||I_Δn]]", "Ohmsches Gesetz – Strom": "I = [[U||R]]", "Ohmsches Gesetz – Widerstand": "R = [[U||I]]", "Parallelschaltung": "[[1||R]] = [[1||R1]] + [[1||R2]] (+ [[1||R3]])", "Leitungswiderstand (Hin + Rück)": "R = [[2 · l||γ · A]]", "Wirkungsgrad": "η = [[P_ab||P_zu]]", "Motorstrom aus dem Netz": "I = [[P||√3 · U · cos φ · η]]", "Strom Wechselstrom-Verbraucher": "I = [[P||U · cos φ]]", "Synchrondrehzahl": "n_s = [[f · 60||p]]", "Läuferdrehzahl aus Schlupf": "n = [[f · 60||p]] · (1 − [[s||100 %]])", "Schlupf": "s = [[n_s − n||n_s]] · 100 %", "Polpaare aus Drehzahl": "p = [[f · 60||n_s]]", "Strom Drehstrom (ohmsche Last)": "I = [[P||√3 · U]]", "Spannungsfall Wechselstrom": "ΔU = [[2 · l · I · cos φ||γ · A]]", "Spannungsfall Drehstrom": "ΔU = [[√3 · l · I · cos φ||γ · A]]", "Frequenz aus Periodendauer": "f = [[1||T]]", "Effektivwert": "U = [[û||√2]]", "Kapazitiver Blindwiderstand": "X_C = [[1||2 · π · f · C]]", "Trafo Übersetzung": "U_2 = U_1 · [[N_2||N_1]]", "Leiterquerschnitt aus Widerstand": "A = [[2 · l||γ · R]]", "Leiterquerschnitt aus Durchmesser": "A = [[π · d²||4]]", "Innenwiderstand Spannungsquelle": "R_i = [[U_0 − U_K||I]]", "Klemmenspannung Spannungsquelle": "U_K = [[U_0 · R||R_i + R]]", "Strangspannung Sternschaltung": "U_Str = [[U||√3]]", "Strangstrom Dreieckschaltung (z.B. Motorschutz bei Stern-Dreieck)": "I_Str = [[I||√3]]", "Vorwiderstand LED": "R_V = [[U − U_F||I_F]]", "Leiterquerschnitt aus Spannungsfall (Wechselstrom)": "A = [[2 · l · I · cos φ||γ · ΔU]]", "Leiterquerschnitt aus Spannungsfall (Drehstrom)": "A = [[√3 · l · I · cos φ||γ · ΔU]]", "Leitungslänge aus Spannungsfall (Wechselstrom)": "l = [[ΔU · γ · A||2 · I · cos φ]]", "Leitungslänge aus Spannungsfall (Drehstrom)": "l = [[ΔU · γ · A||√3 · I · cos φ]]"};
   function fzFrac(str){
     return fz(str).replace(/\[\[(.+?)\|\|(.+?)\]\]/g, '<span class="frac"><span>$1</span><span>$2</span></span>');
   }
