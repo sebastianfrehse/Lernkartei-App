@@ -2072,7 +2072,7 @@ function calcAnsHtml(v){
   let t = v;
   if(opens > 0) t += (t.slice(t.lastIndexOf('[[')).includes('||') ? '' : '||') + ']]';
   let h = escapeHtml(t)
-    .replace(/([A-Za-zηφκγρΔ])_([A-Za-z0-9]+)/g, '$1<sub>$2</sub>')
+    .replace(/([A-Za-zηφκγρΔ])_([A-Za-z0-9Δ]+)/g, '$1<sub>$2</sub>')
     .replace(/\[\[(.*?)\|\|(.*?)\]\]/g, (all, a, b) => '<span class="frac"><span>' + (a || '<i class="empty"></i>') + '</span><span>' + (b || '<i class="empty"></i>') + '</span></span>');
   return h;
 }
@@ -3847,6 +3847,9 @@ if('serviceWorker' in navigator){
     {n:'Leiterquerschnitt aus Spannungsfall (Drehstrom)', f:'A = √3 · l · I · cos φ / (γ · ΔU)', o:'A', u:'mm²', i:[['l','Länge l','m'],['I','Strom I','A'],['c','cos φ','','1'],['k','γ','m/Ωmm²','56'],['d','ΔU (z.B. 3 % von 400 V = 12)','V']], c:v=>Math.sqrt(3)*v.l*v.I*v.c/(v.k*v.d)},
     {n:'Leitungslänge aus Spannungsfall (Wechselstrom)', f:'l = ΔU · γ · A / (2 · I · cos φ)', o:'l', u:'m', i:[['d','ΔU (z.B. 3 % von 230 V = 6,9)','V'],['k','γ','m/Ωmm²','56'],['A','Querschnitt A','mm²'],['I','Strom I','A'],['c','cos φ','','1']], c:v=>v.d*v.k*v.A/(2*v.I*v.c)},
     {n:'Leitungslänge aus Spannungsfall (Drehstrom)', f:'l = ΔU · γ · A / (√3 · I · cos φ)', o:'l', u:'m', i:[['d','ΔU (z.B. 3 % von 400 V = 12)','V'],['k','γ','m/Ωmm²','56'],['A','Querschnitt A','mm²'],['I','Strom I','A'],['c','cos φ','','1']], c:v=>v.d*v.k*v.A/(Math.sqrt(3)*v.I*v.c)},
+    ['Schutzmaßnahmen'],
+    {n:'Schleifenimpedanz (TN-System, Abschaltstrom)', f:'Z_S = U_0 / I_a', o:'Z_S', u:'Ω', i:[['U','Spannung gegen Erde U_0','V','230'],['I','Abschaltstrom I_a','A']], c:v=>v.U/v.I},
+    {n:'Schleifenimpedanz mit RCD', f:'Z_S = U_L / I_Δn', o:'Z_S', u:'Ω', i:[['U','zul. Berührungsspannung U_L','V','50'],['I','Bemessungsfehlerstrom I_Δn (z.B. 30m)','A']], c:v=>v.U/v.I},
     ['Wechselstrom'],
     {n:'Frequenz aus Periodendauer', f:'f = 1 / T', o:'f', u:'Hz', i:[['T','Periodendauer T (z.B. 20m)','s']], c:v=>1/v.T},
     {n:'Scheitelwert', f:'û = U · √2', o:'û', u:'V', i:[['U','Effektivwert U','V','230']], c:v=>v.U*Math.SQRT2},
@@ -3859,11 +3862,11 @@ if('serviceWorker' in navigator){
   // Formelzeichen wie im Tabellenbuch: X_C → X mit tiefgestelltem C, R1 → R mit tiefgestellter 1
   function fz(str){
     return escapeHtml(str)
-      .replace(/([A-Za-zηφκγû])_([A-Za-z0-9]+)/g, '$1<sub>$2</sub>')
+      .replace(/([A-Za-zηφκγû])_([A-Za-z0-9Δ]+)/g, '$1<sub>$2</sub>')
       .replace(/(^|[^A-Za-z])([A-Z])(\d)(?!\d)/g, '$1$2<sub>$3</sub>');
   }
   // Brüche wie auf Papier: Zähler oben, Bruchstrich, Nenner unten
-  const FH = {"Ohmsches Gesetz – Strom": "I = [[U||R]]", "Ohmsches Gesetz – Widerstand": "R = [[U||I]]", "Parallelschaltung": "[[1||R]] = [[1||R1]] + [[1||R2]] (+ [[1||R3]])", "Leitungswiderstand (Hin + Rück)": "R = [[2 · l||γ · A]]", "Wirkungsgrad": "η = [[P_ab||P_zu]]", "Motorstrom aus dem Netz": "I = [[P||√3 · U · cos φ · η]]", "Strom Wechselstrom-Verbraucher": "I = [[P||U · cos φ]]", "Synchrondrehzahl": "n_s = [[f · 60||p]]", "Läuferdrehzahl aus Schlupf": "n = [[f · 60||p]] · (1 − [[s||100 %]])", "Schlupf": "s = [[n_s − n||n_s]] · 100 %", "Polpaare aus Drehzahl": "p = [[f · 60||n_s]]", "Strom Drehstrom (ohmsche Last)": "I = [[P||√3 · U]]", "Spannungsfall Wechselstrom": "ΔU = [[2 · l · I · cos φ||γ · A]]", "Spannungsfall Drehstrom": "ΔU = [[√3 · l · I · cos φ||γ · A]]", "Frequenz aus Periodendauer": "f = [[1||T]]", "Effektivwert": "U = [[û||√2]]", "Kapazitiver Blindwiderstand": "X_C = [[1||2 · π · f · C]]", "Trafo Übersetzung": "U_2 = U_1 · [[N_2||N_1]]", "Leiterquerschnitt aus Widerstand": "A = [[2 · l||γ · R]]", "Leiterquerschnitt aus Durchmesser": "A = [[π · d²||4]]", "Innenwiderstand Spannungsquelle": "R_i = [[U_0 − U_K||I]]", "Klemmenspannung Spannungsquelle": "U_K = [[U_0 · R||R_i + R]]", "Strangspannung Sternschaltung": "U_Str = [[U||√3]]", "Strangstrom Dreieckschaltung (z.B. Motorschutz bei Stern-Dreieck)": "I_Str = [[I||√3]]", "Vorwiderstand LED": "R_V = [[U − U_F||I_F]]", "Leiterquerschnitt aus Spannungsfall (Wechselstrom)": "A = [[2 · l · I · cos φ||γ · ΔU]]", "Leiterquerschnitt aus Spannungsfall (Drehstrom)": "A = [[√3 · l · I · cos φ||γ · ΔU]]", "Leitungslänge aus Spannungsfall (Wechselstrom)": "l = [[ΔU · γ · A||2 · I · cos φ]]", "Leitungslänge aus Spannungsfall (Drehstrom)": "l = [[ΔU · γ · A||√3 · I · cos φ]]"};
+  const FH = {"Schleifenimpedanz (TN-System, Abschaltstrom)": "Z_S = [[U_0||I_a]]", "Schleifenimpedanz mit RCD": "Z_S = [[U_L||I_Δn]]", "Ohmsches Gesetz – Strom": "I = [[U||R]]", "Ohmsches Gesetz – Widerstand": "R = [[U||I]]", "Parallelschaltung": "[[1||R]] = [[1||R1]] + [[1||R2]] (+ [[1||R3]])", "Leitungswiderstand (Hin + Rück)": "R = [[2 · l||γ · A]]", "Wirkungsgrad": "η = [[P_ab||P_zu]]", "Motorstrom aus dem Netz": "I = [[P||√3 · U · cos φ · η]]", "Strom Wechselstrom-Verbraucher": "I = [[P||U · cos φ]]", "Synchrondrehzahl": "n_s = [[f · 60||p]]", "Läuferdrehzahl aus Schlupf": "n = [[f · 60||p]] · (1 − [[s||100 %]])", "Schlupf": "s = [[n_s − n||n_s]] · 100 %", "Polpaare aus Drehzahl": "p = [[f · 60||n_s]]", "Strom Drehstrom (ohmsche Last)": "I = [[P||√3 · U]]", "Spannungsfall Wechselstrom": "ΔU = [[2 · l · I · cos φ||γ · A]]", "Spannungsfall Drehstrom": "ΔU = [[√3 · l · I · cos φ||γ · A]]", "Frequenz aus Periodendauer": "f = [[1||T]]", "Effektivwert": "U = [[û||√2]]", "Kapazitiver Blindwiderstand": "X_C = [[1||2 · π · f · C]]", "Trafo Übersetzung": "U_2 = U_1 · [[N_2||N_1]]", "Leiterquerschnitt aus Widerstand": "A = [[2 · l||γ · R]]", "Leiterquerschnitt aus Durchmesser": "A = [[π · d²||4]]", "Innenwiderstand Spannungsquelle": "R_i = [[U_0 − U_K||I]]", "Klemmenspannung Spannungsquelle": "U_K = [[U_0 · R||R_i + R]]", "Strangspannung Sternschaltung": "U_Str = [[U||√3]]", "Strangstrom Dreieckschaltung (z.B. Motorschutz bei Stern-Dreieck)": "I_Str = [[I||√3]]", "Vorwiderstand LED": "R_V = [[U − U_F||I_F]]", "Leiterquerschnitt aus Spannungsfall (Wechselstrom)": "A = [[2 · l · I · cos φ||γ · ΔU]]", "Leiterquerschnitt aus Spannungsfall (Drehstrom)": "A = [[√3 · l · I · cos φ||γ · ΔU]]", "Leitungslänge aus Spannungsfall (Wechselstrom)": "l = [[ΔU · γ · A||2 · I · cos φ]]", "Leitungslänge aus Spannungsfall (Drehstrom)": "l = [[ΔU · γ · A||√3 · I · cos φ]]"};
   function fzFrac(str){
     return fz(str).replace(/\[\[(.+?)\|\|(.+?)\]\]/g, '<span class="frac"><span>$1</span><span>$2</span></span>');
   }
