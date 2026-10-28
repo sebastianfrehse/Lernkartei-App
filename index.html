@@ -2085,17 +2085,25 @@ function tableChoices(t, col){
 }
 // --- Rechenaufgaben: Ergebnis mit Formelzeichen und Einheit eintippen ---
 const UNIT_ALIAS = { 'Euro':'€','EUR':'€','euro':'€','Ohm':'Ω','mm2':'mm²','min⁻¹':'1/min','U/min':'1/min','Std':'h','std':'h','Stunden':'h' };
-const UNIT_BASE = ['A','V','W','Ω','Hz','Wh','VA','var','s','h','min','1/min','%','€','m','m²','mm²','F','H','S','m/Ωmm²','J','°','N','Nm','kg','K'];
-const UNIT_PREFIX = { k:1e3, M:1e6, G:1e9, m:1e-3, 'µ':1e-6, u:1e-6, n:1e-9 };
+// Jede Einheit = [Grundeinheit, Faktor] – so wird z.B. 5500 W = 5,5 kW, 90 min = 1,5 h, 3,6 MJ = 1 kWh erkannt
+const UNITS = {
+  'A':['A',1],'V':['V',1],'W':['W',1],'Ω':['Ω',1],'VA':['VA',1],'var':['var',1],'F':['F',1],'H':['H',1],'S':['S',1],
+  'Hz':['Hz',1],'1/min':['Hz',1/60],'1/s':['Hz',1],
+  's':['s',1],'min':['s',60],'h':['s',3600],
+  'J':['J',1],'Ws':['J',1],'Wh':['J',3600],'Nm':['Nm',1],'N':['N',1],
+  'm':['m',1],'m²':['m²',1],'dm²':['m²',1e-2],'cm²':['m²',1e-4],'mm²':['m²',1e-6],'m/Ωmm²':['m/Ωmm²',1],
+  '€':['€',1],'ct':['€',0.01],'%':['',0.01],'°':['°',1],'K':['K',1],'kg':['kg',1],'g':['kg',1e-3]
+};
+const UNIT_PREFIXABLE = ['A','V','W','Ω','VA','var','F','H','S','Hz','s','J','Ws','Wh','N','Nm','m','g'];
+const UNIT_PREFIX = { G:1e9, M:1e6, k:1e3, c:1e-2, m:1e-3, 'µ':1e-6, 'μ':1e-6, u:1e-6, n:1e-9, p:1e-12 };
+Object.assign(UNIT_ALIAS, { 'VAr':'var','Var':'var','Grad':'°','sec':'s','Sek':'s','m2':'m²','cm2':'cm²','dm2':'dm²','ohm':'Ω' });
 function parseUnit(u){
   u = (u || '').trim();
   if(!u) return { base:'', f:1 };
   if(UNIT_ALIAS[u]) u = UNIT_ALIAS[u];
-  if(u === 'ct') return { base:'€', f:0.01 };
-  if(u === '%') return { base:'', f:0.01 };
-  if(UNIT_BASE.includes(u)) return { base:u, f:1 };
+  if(UNITS[u]) return { base:UNITS[u][0], f:UNITS[u][1] };
   const p = u[0], rest = UNIT_ALIAS[u.slice(1)] || u.slice(1);
-  if(UNIT_PREFIX[p] && UNIT_BASE.includes(rest)) return { base:rest, f:UNIT_PREFIX[p] };
+  if(UNIT_PREFIX[p] && UNIT_PREFIXABLE.includes(rest)) return { base:UNITS[rest][0], f:UNIT_PREFIX[p] * UNITS[rest][1] };
   return null;
 }
 const normSym = x => (x || '').replace(/[\s_]/g, '');
@@ -2139,7 +2147,7 @@ function checkCalcAnswer(given, expected){
   const e = parseCalcAnswer(expected), g = parseCalcAnswer(given);
   if(!g) return { ok:false, msg:'So kann ich das nicht lesen – Form: Zahl Einheit (z.B. 0,5 A)' };
   if(g.sym && g.sym !== e.sym) return { ok:false, msg:'Falsches Formelzeichen' };
-  if(g.base !== e.base) return { ok:false, msg:'Falsche Einheit' };
+  if(g.base !== e.base) return { ok:false, msg:'Einheit passt nicht (' + (g.unit || 'keine') + ' lässt sich nicht in ' + (e.unit || 'keine Einheit') + ' umrechnen)' };
   const diff = Math.abs(g.value - e.value);
   // 1) bis 3 % daneben: Rundung irgendwo in der Rechnung (z.B. √3 ≈ 1,73 oder Zwischenergebnis gerundet)
   if(diff <= Math.max(Math.abs(e.value) * 0.03, 1e-12)) return { ok:true, rounded: diff > Math.abs(e.value) * 1e-6 };
@@ -2976,7 +2984,7 @@ function renderCalcCard(card, body){
   const PAGES = {
     zahl: ['7','8','9','⌫','4','5','6','Leeren','1','2','3','=','0',',','−','BRUCH'],
     zeichen: ['I','U','R','P','W','Q','S','Z','X_L','X_C','f','n','n_s','p','s','t','T','η','cos φ','φ','l','A','d','γ','ρ','C','L','N','K','ΔU','R_i','R_V','P_ab','P_zu','U_0','U_K','I_N','I_1','I_2','I_ges','U_1','U_2','U_ges','R_1','R_2','R_3','R_ges','P_1','P_2','N_1','N_2','U_F','I_F'],
-    einheit: ['k','M','m','µ','A','V','W','Ω','Wh','kWh','VA','var','Hz','s','h','min','1/min','%','€','ct','m²','mm²','F','H','J','°']
+    einheit: ['k','M','m','µ','A','V','W','Ω','Wh','kWh','Ws','VA','var','Hz','s','h','min','1/min','%','€','ct','m²','mm²','F','H','J','°']
   };
   const PRE = ['k','M','m','µ'];
   const kp = document.getElementById('ansKp'), grid = document.getElementById('ansKpGrid'), tabs = document.getElementById('ansKpTabs');
