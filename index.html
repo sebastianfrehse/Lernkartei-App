@@ -477,7 +477,7 @@
   #ansKp{display:none;flex-direction:column;gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);flex-shrink:0;}
   #ansKp.open{display:flex;}
   #ansKp .ak-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;max-height:34vh;overflow-y:auto;}
-  #ansKp button{background:#3a3f43;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 0;font-size:16px;}
+  #ansKp button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;background:#3a3f43;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 0;font-size:16px;}
   #ansKp .ak-tabs{display:grid;grid-template-columns:1fr 1fr 1fr .7fr .9fr;gap:5px;}
   #ansKp .ak-tabs button{font-size:13.5px;background:var(--surface2);}
   #ansKp .ak-tabs button.active{background:var(--copper-dim);color:#fff;}
@@ -3059,6 +3059,21 @@ function renderCalcCard(card, body){
     setVal(v);
     if(k === 'BRUCH' || k === '⌫') draw();
   }
+  // Taste zählt beim Loslassen des Fingers – auch wenn er dabei ein kleines Stück verrutscht.
+  // (Vorher lief das über "click": Das Handy verwirft den Klick, sobald der Finger minimal wackelt,
+  //  weil es das für Scrollen hält – dann kam z.B. die 2 einfach nicht an.)
+  function akTap(b, fn){
+    let sx = 0, sy = 0, down = false, viaPointer = false;
+    b.addEventListener('pointerdown', e => { e.preventDefault(); down = true; sx = e.clientX; sy = e.clientY; });
+    b.addEventListener('pointercancel', () => { down = false; });
+    b.addEventListener('pointerup', e => {
+      if(!down) return; down = false;
+      if(Math.hypot(e.clientX - sx, e.clientY - sy) > 25) return; // richtig gewischt (z.B. Zeichen-Liste scrollen)
+      viaPointer = true; setTimeout(() => { viaPointer = false; }, 600);
+      fn();
+    });
+    b.addEventListener('click', () => { if(!viaPointer) fn(); }); // Tastatur/Maus als Rückfall
+  }
   function keyHtml(k){
     if(k === 'BRUCH'){
       const st = fracState((target && target.dataset.v) || '');
@@ -3076,8 +3091,7 @@ function renderCalcCard(card, body){
       if(k === 'BRUCH') b.style.fontSize = '13px';
       if(k === '⌫' || k === 'Leeren') b.className = 'ak-del';
       if(page === 'einheit' && PRE.includes(k)) b.className = 'ak-pre';
-      b.addEventListener('pointerdown', e => e.preventDefault());
-      b.addEventListener('click', () => put(k));
+      akTap(b, () => put(k));
       grid.appendChild(b);
     });
     tabs.innerHTML = '';
@@ -3086,8 +3100,7 @@ function renderCalcCard(card, body){
       if(id === page) b.className = 'active';
       if(id === 'ok') b.className = 'ak-ok';
       if(id === 'del') b.className = 'ak-del';
-      b.addEventListener('pointerdown', e => e.preventDefault());
-      b.addEventListener('click', () => {
+      akTap(b, () => {
         if(id === 'ok'){
           if(target && fracState(target.dataset.v || '')) setVal(closeFrac(target.dataset.v));
           const all = [...document.querySelectorAll('#learnBody .calc-ans')];
