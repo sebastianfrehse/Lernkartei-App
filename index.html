@@ -3072,6 +3072,9 @@ function renderCalcCard(card, body){
       viaPointer = true; setTimeout(() => { viaPointer = false; }, 600);
       fn();
     });
+    // Nach dem Loslassen schickt das Handy noch einen "click" hinterher. Verschwindet die Tastatur
+    // dabei, landet dieser Klick auf dem Knopf darunter (z.B. "Überspringen") – das hier verhindert es.
+    b.addEventListener('touchend', e => { if(viaPointer) e.preventDefault(); }, { passive: false });
     b.addEventListener('click', () => { if(!viaPointer) fn(); }); // Tastatur/Maus als Rückfall
   }
   function keyHtml(k){
@@ -3105,7 +3108,10 @@ function renderCalcCard(card, body){
           if(target && fracState(target.dataset.v || '')) setVal(closeFrac(target.dataset.v));
           const all = [...document.querySelectorAll('#learnBody .calc-ans')];
           const next = all[all.indexOf(target) + 1];
-          if(next) showAnsKp(next); else hideAnsKp();
+          const empty = all.find(i => !(i.dataset.v || '').trim());
+          if(next) showAnsKp(next);
+          else if(empty) showAnsKp(empty); // ein Feld ist noch leer → dort weitermachen
+          else { hideAnsKp(); const chk = document.getElementById('calcCheck'); if(chk) chk.click(); } // alles ausgefüllt → direkt prüfen
         }else if(id === 'del') put('⌫');
         else { page = id; draw(); }
       });
@@ -3125,7 +3131,11 @@ function renderCalcCard(card, body){
   window.hideAnsKp = function(){
     if(target){ target.classList.remove('kp-active'); const c = target.querySelector('.cur'); if(c) c.remove(); }
     target = null; kp.classList.remove('open');
+    window.__kpClosedAt = Date.now();
   };
+  document.addEventListener('click', e => {
+    if(Date.now() - (window.__kpClosedAt || 0) < 450 && e.target.closest('#learnSkip')){ e.stopPropagation(); e.preventDefault(); }
+  }, true);
 })();
 
 // Fragekasten oben (Bild, Frage, ?-Knopf für die Erklärung)
