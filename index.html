@@ -4048,6 +4048,7 @@ if('serviceWorker' in navigator){
     {n:'Wirkleistung aus Scheinleistung', f:'P = S · cos φ', o:'P', u:'W', i:[['S','Scheinleistung S','VA'],['c','cos φ','']], c:v=>v.S*v.c},
     {n:'Blindleistung', f:'Q = √(S² − P²)', o:'Q', u:'var', i:[['S','Scheinleistung S','VA'],['P','Wirkleistung P','W']], c:v=>Math.sqrt(v.S*v.S-v.P*v.P)},
     {n:'Wirkungsgrad', f:'η = P_ab / P_zu', o:'η', u:'', i:[['a','P_ab (abgegeben)','W'],['z','P_zu (aufgenommen)','W']], c:v=>v.a/v.z},
+    {n:'Verlustleistung', f:'P_v = P_zu − P_ab', o:'P_v', u:'W', i:[['z','P_zu (aufgenommen)','W'],['a','P_ab (abgegeben, Leistungsschild)','W']], c:v=>v.z-v.a},
     ['Motor / Drehstrom'],
     {n:'Motorstrom aus dem Netz', f:'I = P / (√3 · U · cos φ · η)', o:'I', u:'A', i:[['P','Leistung P (Schild)','W'],['U','Spannung U','V','400'],['c','cos φ',''],['e','η (z.B. 0,85)','']], c:v=>v.P/(Math.sqrt(3)*v.U*v.c*v.e)},
     {n:'Strom Drehstrom (ohmsche Last)', f:'I = P / (√3 · U)', o:'I', u:'A', i:[['P','Gesamtleistung P','W'],['U','Spannung U','V','400']], c:v=>v.P/(Math.sqrt(3)*v.U)},
