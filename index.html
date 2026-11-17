@@ -2291,6 +2291,8 @@ async function importCards(){
       if(r.image && ex && !ex.image){ ex.image = r.image; changed = true; }
       if(r.table && ex && JSON.stringify(ex.table || null) !== JSON.stringify(r.table)){ ex.table = r.table; ex.options = []; ex.correctIndex = -1; changed = true; }
       if(r.calc && ex && JSON.stringify(ex.calc || null) !== JSON.stringify(r.calc)){ ex.calc = r.calc; ex.options = []; ex.correctIndex = -1; changed = true; }
+      // Richtige Antwort oder Antworttexte berichtigt? Dann übernehmen und die Karte neu lernen lassen
+      if(ex && !r.table && !r.calc && r.options && r.options.length === NUM_OPTIONS && (ex.correctIndex !== r.correctIndex || JSON.stringify(ex.options) !== JSON.stringify(r.options))){ ex.options = r.options; ex.correctIndex = r.correctIndex; ex.streak = 0; changed = true; }
       if(r.explanation && ex && ex.explanation !== r.explanation){ ex.explanation = r.explanation; changed = true; expAdded++; }
       if(changed) imgAdded++; else skipped++;
       return;
@@ -3523,7 +3525,7 @@ async function openGroupDetail(code){
       const local = categories.find(c => c.name.toLowerCase() === (s.name || '').toLowerCase());
       const localQs = new Set(cards.filter(c => local && c.categoryId === local.id).map(c => normQ(c.question)));
       const newCount = (s.cards || []).filter(c => !localQs.has(normQ(c.question))).length;
-      const imgCount = local ? (s.cards || []).filter(c => c.image && cards.some(x => x.categoryId === local.id && normQ(x.question) === normQ(c.question) && !x.image)).length : 0;
+      const imgCount = local ? (s.cards || []).filter(c => cards.some(x => x.categoryId === local.id && normQ(x.question) === normQ(c.question) && ((c.image && !x.image) || (!c.table && !c.calc && Array.isArray(c.options) && c.options.length === NUM_OPTIONS && (x.correctIndex !== c.correctIndex || JSON.stringify(x.options) !== JSON.stringify(c.options)))))).length : 0;
       const remCount = isMine ? 0 : shareRemovals(code, s, shared).length;
       const when = s.updatedAt ? ' · aktualisiert ' + new Date(s.updatedAt).toLocaleDateString('de-DE') : '';
       let btn;
@@ -3704,6 +3706,8 @@ async function importSharedCategory(code, share){
       if(ex && c.table && JSON.stringify(ex.table || null) !== JSON.stringify(c.table)){ ex.table = c.table; ex.options = []; ex.correctIndex = -1; changed = true; }
       if(ex && c.calc && JSON.stringify(ex.calc || null) !== JSON.stringify(c.calc)){ ex.calc = c.calc; ex.options = []; ex.correctIndex = -1; changed = true; }
       if(ex && c.explanation && ex.explanation !== c.explanation){ ex.explanation = c.explanation; changed = true; }
+      // Ersteller hat die richtige Antwort berichtigt? Dann übernehmen und die Karte neu lernen lassen
+      if(ex && !c.table && !c.calc && Array.isArray(c.options) && c.options.length === NUM_OPTIONS && (ex.correctIndex !== c.correctIndex || JSON.stringify(ex.options) !== JSON.stringify(c.options))){ ex.options = c.options; ex.correctIndex = c.correctIndex; ex.streak = 0; changed = true; }
       if(changed) added++; else skipped++;
       return;
     }
