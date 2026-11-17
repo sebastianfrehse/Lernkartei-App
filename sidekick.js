@@ -28,8 +28,8 @@
     '#sidekick .pfote{position:absolute;left:-26px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}'+
     '#sidekick .p1{top:26px;transform:rotate(-14deg)}'+
     '#sidekick .p2{top:246px;transform:rotate(12deg)}'+
-    '#sidekickBubble{position:fixed;z-index:99999;top:calc(34% - 30px);max-width:60vw;background:#fff;color:#222;font:600 15px/1.3 system-ui,sans-serif;padding:10px 13px;border-radius:14px;box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;transition:opacity .3s;pointer-events:auto}'+
-    '#sidekickBubble.show{opacity:1}'+
+    '#sidekickBubble{position:fixed;z-index:99999;top:calc(34% - 30px);max-width:60vw;background:#fff;color:#222;font:600 15px/1.3 system-ui,sans-serif;padding:10px 13px;border-radius:14px;box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;transition:opacity .3s;pointer-events:none}'+
+    '#sidekickBubble.show{opacity:1;pointer-events:auto}'+
     '#sidekickBubble.l{left:118px}#sidekickBubble.r{right:118px}';
   document.head.appendChild(css);
 

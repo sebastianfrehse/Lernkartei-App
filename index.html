@@ -608,7 +608,10 @@
   /* Professor ploppt auf, wenn man beim Lernen die Formeln aufmacht */
   #profPop{position:fixed;right:6px;bottom:0;z-index:60;display:flex;align-items:flex-end;gap:2px;pointer-events:none;
     transform:translateY(115%);transition:transform .45s cubic-bezier(.2,1.4,.4,1);}
-  #profPop.show{transform:translateY(0);pointer-events:auto;}
+  #profPop.show{transform:translateY(0);}
+  /* Nur die Sprechblase ist antippbar – der Rest (Figur, leere Fläche drumherum) lässt Taps zu den Tasten darunter durch */
+  #profPop.show .prof-bubble{pointer-events:auto;}
+  #profPop .prof-fig, #profPop .prof-fig *{pointer-events:none !important;}
   #profPop .prof-bubble{position:relative;max-width:min(230px,58vw);margin-bottom:120px;background:#fffdf6;color:#1b1d1f;
     border:3px solid #121212;border-radius:18px;padding:10px 12px;font-size:14.5px;line-height:1.35;font-weight:600;
     box-shadow:0 6px 18px rgba(0,0,0,.35);}
@@ -4260,6 +4263,10 @@ if('serviceWorker' in navigator){
     profTimer = setTimeout(hideProf, 7000);
   }
   $('profPop').addEventListener('click', hideProf);
+  // Professor sitzt über der Tastatur: Sobald man irgendwo anders hintippt, verschwindet er (der Tipp zählt trotzdem)
+  document.addEventListener('pointerdown', e => {
+    if($('profPop').classList.contains('show') && !e.target.closest('#profPop .prof-bubble')) hideProf();
+  }, true);
 
 
   // Eigene Zahlentastatur für die Formel-Felder (statt Handy-Tastatur, die sonst alles verdeckt)
