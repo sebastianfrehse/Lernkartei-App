@@ -1146,10 +1146,24 @@ async function shareCategoryToGroup(code, payload){
     return false;
   }
 }
-async function getSharedCategories(code){
+// Pro Rubrik-Name zählt nur der zuerst geteilte Eintrag (das Original). Spätere Einträge mit
+// gleichem Namen von anderen werden ignoriert – sonst könnte jemand die Rubrik "überschreiben"
+// und beim Aktualisieren würden bei allen Fragen verschwinden.
+function originalShares(list){
+  const best = new Map();
+  list.forEach(sh => {
+    const k = (sh.name || '').toLowerCase();
+    const cur = best.get(k);
+    const t = x => x.createdAt || x.updatedAt || 0;
+    if(!cur || t(sh) < t(cur) || (t(sh) === t(cur) && sh.id < cur.id)) best.set(k, sh);
+  });
+  return list.filter(sh => best.get((sh.name || '').toLowerCase()) === sh);
+}
+async function getSharedCategories(code, raw){
   try{
     const snap = await db.collection('groups').doc(code).collection('shared').get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return raw ? list : originalShares(list);
   }catch(e){
     console.error('Geteilte Rubriken konnten nicht geladen werden', e);
     return [];
@@ -1191,7 +1205,18 @@ function buildShareCards(cat){
   }
   return { list, droppedPhotos };
 }
-function isMyShare(sh){ return displayName && sh.sharedBy && sh.sharedBy.toLowerCase() === displayName.toLowerCase(); }
+// Besitzer einer geteilten Rubrik = das Gerät, das sie geteilt hat (geheimer Geräte-Schlüssel),
+// nicht mehr nur der Profilname – den könnte sich ja jeder genauso geben.
+const myOwnerId = (() => {
+  let id = localGet('ownerId');
+  if(!id){
+    id = 'o-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    localSet('ownerId', id);
+  }
+  return id;
+})();
+const isLegacyMyShare = sh => !sh.ownerId && displayName && sh.sharedBy && sh.sharedBy.toLowerCase() === displayName.toLowerCase();
+function isMyShare(sh){ return sh.ownerId ? sh.ownerId === myOwnerId : isLegacyMyShare(sh); }
 function shareDiffers(sh, cat){
   const mine = cards.filter(c => c.categoryId === cat.id);
   const theirs = sh.cards || [];
@@ -1209,6 +1234,8 @@ async function syncMyShares(onlyCode){
     for(const sh of shared){
       if(!isMyShare(sh)) continue;
       const cat = categories.find(c => c.name.toLowerCase() === (sh.name || '').toLowerCase());
+      // Alte Einträge (nur mit Namen) einmalig fest diesem Gerät zuordnen
+      if(!sh.ownerId && await updateSharedCategory(g.code, sh.id, { ownerId: myOwnerId })) sh.ownerId = myOwnerId;
       if(!cat || !shareDiffers(sh, cat)) continue;
       const { list } = buildShareCards(cat);
       if(await updateSharedCategory(g.code, sh.id, { cards: list, updatedAt: Date.now() })){ sh.cards = list; updated++; }
@@ -3600,10 +3627,16 @@ function renderShareCategoryForm(code){
       const { list, droppedPhotos } = buildShareCards(cat);
       if(droppedPhotos) alert('Hinweis: ' + droppedPhotos + ' eigene Fotos sind zu groß zum Teilen und werden ohne Bild geteilt.');
       // Schon mal geteilt? Dann den vorhandenen Eintrag aktualisieren statt doppelt anzulegen
-      const existing = (await getSharedCategories(code)).find(sh => isMyShare(sh) && (sh.name || '').toLowerCase() === cat.name.toLowerCase());
-      const ok = existing
-        ? await updateSharedCategory(code, existing.id, { cards: list, updatedAt: Date.now() })
-        : await shareCategoryToGroup(code, { name: cat.name, sharedBy: displayName || 'unbekannt', createdAt: Date.now(), updatedAt: Date.now(), cards: list });
+      const sameName = originalShares(await getSharedCategories(code, true)).find(sh => (sh.name || '').toLowerCase() === cat.name.toLowerCase());
+      // Rubrik mit dem Namen gehört schon jemand anderem? Dann darf nur der sie ändern
+      if(sameName && !isMyShare(sameName)){
+        statusEl.textContent = '';
+        alert('Die Rubrik „' + cat.name + '“ wurde schon von ' + (sameName.sharedBy || 'jemand anderem') + ' geteilt. Nur ' + (sameName.sharedBy || 'der Ersteller') + ' kann sie ändern.\n\nWenn du deine Version trotzdem teilen willst, benenne deine Rubrik vorher um.');
+        return;
+      }
+      const ok = sameName
+        ? await updateSharedCategory(code, sameName.id, { cards: list, updatedAt: Date.now(), ownerId: myOwnerId })
+        : await shareCategoryToGroup(code, { name: cat.name, sharedBy: displayName || 'unbekannt', ownerId: myOwnerId, createdAt: Date.now(), updatedAt: Date.now(), cards: list });
       if(ok){
         await openGroupDetail(code);
       }else{
