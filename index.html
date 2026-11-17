@@ -3964,6 +3964,47 @@ if('serviceWorker' in navigator){
   });
 }
 
+// --- Automatisch auf die neueste Version wechseln ---
+// Auf dem Handy bleibt die App oft tagelang im Hintergrund offen und wird nie neu geladen.
+// Darum beim Zurückholen in den Vordergrund (und alle 30 Min.) prüfen, ob es online eine neue Version gibt.
+(function(){
+  let baseHash = null, lastCheck = 0, pending = false;
+  async function pageHash(){
+    const res = await fetch('./?v=' + Date.now(), { cache: 'no-store' });
+    if(!res.ok) return null;
+    const t = await res.text();
+    let h = 0; for(let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+    return h + ':' + t.length;
+  }
+  const busy = () => document.getElementById('learn').classList.contains('open') || !!document.querySelector('.sheet-overlay.open');
+  function applyUpdate(){
+    if(!busy()){ location.reload(); return; }
+    if(document.getElementById('updateBanner')) return;
+    const b = document.createElement('div');
+    b.id = 'updateBanner';
+    b.textContent = '🔄 Neue Version da – hier tippen zum Aktualisieren';
+    b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:14px;z-index:99999;background:#d98b4a;color:#fff;padding:12px 14px;border-radius:12px;font-weight:600;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer;';
+    b.addEventListener('click', () => location.reload());
+    document.body.appendChild(b);
+  }
+  async function check(){
+    if(!navigator.onLine || Date.now() - lastCheck < 60000) return;
+    lastCheck = Date.now();
+    try{
+      const h = await pageHash();
+      if(!h) return;
+      if(baseHash === null){ baseHash = h; return; }
+      if(h !== baseHash) pending = true;
+    }catch(e){}
+    if(pending) applyUpdate();
+  }
+  window.addEventListener('load', () => setTimeout(check, 3000));
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') check(); });
+  setInterval(check, 30 * 60000);
+  // Lernrunde beendet und Update wartet? Dann jetzt neu laden
+  document.getElementById('learnClose').addEventListener('click', () => { if(pending) setTimeout(applyUpdate, 300); });
+})();
+
 
 // --- Elektro-Rechner ---
 (function(){
