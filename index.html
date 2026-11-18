@@ -506,6 +506,18 @@
     border-radius:var(--radius);
     font-size:15px;
   }
+  .ueb-sub{font-size:13.5px;color:var(--muted);line-height:1.45;margin:-6px 0 14px;}
+  .ueb-chip{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:11px 14px;margin-bottom:8px;font-size:15px;line-height:1.3;}
+  .ueb-chip small{color:var(--muted);font-size:12.5px;}
+  .ueb-chip.on{border-color:var(--copper);}
+  .ueb-box{flex:0 0 22px;width:22px;height:22px;border-radius:6px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#1b1d1f;}
+  .ueb-chip.on .ueb-box{background:var(--copper);border-color:var(--copper);}
+  .ueb-weg{background:var(--surface);border-radius:12px;padding:12px 14px;margin-top:4px;font-size:14.5px;line-height:1.7;}
+  .ueb-weg-h{font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--copper);margin-bottom:6px;}
+  .ueb-weg-p{margin-bottom:8px;}
+  .ueb-weg-p:last-child{margin-bottom:0;}
+  .ueb-weg-n{color:var(--muted);margin-right:6px;}
+  .ueb-weg .frac{vertical-align:middle;}
   .learn-skip{margin-top:12px;background:none;border:1px solid var(--line);color:var(--muted);padding:11px;border-radius:var(--radius);font-size:14px;}
   .learn-card{position:relative;}
   .learn-help{position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;background:var(--surface2);border:1px solid var(--line);color:var(--copper);font-weight:700;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:1;}
@@ -834,6 +846,7 @@
 
   <div class="fab-row">
     <button class="btn-secondary" id="learnBtn">Lernen</button>
+    <button class="btn-secondary" id="uebenBtn">🎲 Üben</button>
     <button class="btn-primary" id="addBtn">+ Neue Karte</button>
   </div>
 
@@ -995,6 +1008,19 @@
     <div class="learn-body" id="groupBody"></div>
   </div>
 
+  <!-- Übungsmodus: Themenauswahl -->
+  <div class="sheet-overlay" id="uebenPicker">
+    <div class="sheet">
+      <h2>Zufallsaufgaben üben</h2>
+      <p class="ueb-sub">Immer neue Rechenaufgaben mit neuen Zahlen – mit Rechenweg zum Nachlesen. Das ändert nichts an deinen Karten und Ampeln.</p>
+      <div id="uebenThemen"></div>
+      <div class="sheet-actions" style="margin-top:16px;">
+        <button class="btn-secondary" id="uebenCancel" type="button">Abbrechen</button>
+        <button class="btn-primary" id="uebenStart" type="button">Los geht's</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Lern-Modus -->
   <div id="learn">
     <div class="learn-top">
@@ -1088,6 +1114,7 @@
 
 </div>
 
+<script src="ueben.js"></script>
 <script>
 const NUM_OPTIONS = 5;
 
@@ -2790,6 +2817,7 @@ document.getElementById('imgViewerClose').addEventListener('click', ()=> documen
 
 // --- Lern-Modus ---
 function startLearning(){
+  uebenAktiv = false;
   const pool = selectedCategoryId === null
     ? cards
     : cards.filter(c => c.categoryId === selectedCategoryId);
@@ -2826,6 +2854,7 @@ function shuffledOptions(card){
 }
 
 function renderLearnCard(){
+  if(uebenAktiv){ uebenNext(); return; }
   const body = document.getElementById('learnBody');
   const countEl = document.getElementById('learnCount');
   document.getElementById('learnMoveBtn').style.display = learnIndex < learnQueue.length ? '' : 'none';
@@ -3015,7 +3044,7 @@ function renderCalcCard(card, body){
 (function(){
   const PAGES = {
     zahl: ['7','8','9','⌫','4','5','6','Leeren','1','2','3','=','0',',','−','BRUCH'],
-    zeichen: ['I','U','R','P','W','Q','S','Z','X_L','X_C','f','n','n_s','p','s','t','T','η','cos φ','φ','l','A','d','γ','ρ','C','L','N','K','ΔU','R_i','R_V','P_ab','P_zu','U_0','U_K','I_N','I_1','I_2','I_ges','U_1','U_2','U_ges','R_1','R_2','R_3','R_ges','P_1','P_2','N_1','N_2','U_F','I_F'],
+    zeichen: ['I','U','R','P','W','Q','S','Z','X_L','X_C','f','n','n_s','p','s','t','T','η','cos φ','φ','l','A','d','γ','ρ','C','L','N','K','ΔU','R_i','R_V','P_ab','P_zu','U_0','U_K','I_N','I_1','I_2','I_ges','U_1','U_2','U_ges','R_1','R_2','R_3','R_ges','P_1','P_2','N_1','N_2','U_F','I_F','I_K','I_a','Z_S','P_v','P_mec','P_R','U_Str','I_Str','Δu','û'],
     einheit: ['k','M','m','µ','A','V','W','Ω','Wh','kWh','Ws','VA','var','Hz','s','h','min','1/min','%','€','ct','m²','mm²','F','H','J','°']
   };
   const PRE = ['k','M','m','µ'];
@@ -3164,6 +3193,7 @@ let skippedIds = new Set();
 function skipCard(card){
   if(answered) return;
   if(window.hideAnsKp) hideAnsKp();
+  if(card.practice){ uebenNext(); return; }
   if(!skippedIds.has(card.id) && learnQueue.length - learnIndex > 1){
     skippedIds.add(card.id);
     learnQueue.splice(learnIndex, 1);
@@ -3173,6 +3203,59 @@ function skipCard(card){
   }
   renderLearnCard();
 }
+// --- Übungsmodus: Zufallsaufgaben (Vorlagen in ueben.js) ---
+// Die Aufgaben sind "Karten" im Rechenaufgaben-Format, aber nur für den Moment – sie werden nicht gespeichert
+// und verändern keine Ampeln.
+let uebenAktiv = false;
+let uebenStat = { n: 0, ok: 0, card: null, topics: null };
+function startUeben(topics){
+  uebenAktiv = true;
+  uebenStat = { n: 0, ok: 0, card: null, topics: topics || null };
+  skippedIds = new Set();
+  document.getElementById('learn').classList.add('open');
+  uebenNext();
+}
+function uebenCount(){
+  document.getElementById('learnCount').textContent = 'Aufgabe ' + uebenStat.n + (uebenStat.n > 1 || uebenStat.ok ? ' · ' + uebenStat.ok + ' richtig' : '');
+}
+function uebenNext(){
+  const body = document.getElementById('learnBody');
+  document.getElementById('learnMoveBtn').style.display = 'none';
+  document.getElementById('learnDelBtn').style.display = 'none';
+  if(typeof resetLearnDel === 'function') resetLearnDel();
+  if(window.clearScratch) clearScratch();
+  if(window.hideAnsKp) hideAnsKp();
+  uebenStat.card = window.uebenNeueAufgabe(uebenStat.topics, uebenStat.card);
+  uebenStat.n++;
+  answered = false;
+  uebenCount();
+  renderCalcCard(uebenStat.card, body);
+  body.scrollTop = 0;
+}
+function uebenFinish(card, correct){
+  if(correct) uebenStat.ok++;
+  uebenCount();
+  const body = document.getElementById('learnBody');
+  const skipBtn = document.getElementById('learnSkip');
+  if(skipBtn) skipBtn.remove();
+  // Rechenweg zum Nachlesen (auch über das ?-Symbol abrufbar)
+  card.explanation = card.wegLines.map((ls, i) => (card.wegLines.length > 1 ? (i + 1) + '.\n' : '') + ls.join('\n')).join('\n\n');
+  const help = document.getElementById('learnHelp');
+  if(help) help.classList.add('has-exp');
+  const box = document.createElement('div');
+  box.className = 'ueb-weg';
+  box.innerHTML = '<div class="ueb-weg-h">Rechenweg</div>' + card.wegLines.map((ls, i) =>
+    '<div class="ueb-weg-p">' + (card.wegLines.length > 1 ? '<span class="ueb-weg-n">' + (i + 1) + '.</span>' : '') +
+    ls.map(l => calcAnsHtml(l)).join('<br>') + '</div>').join('');
+  body.appendChild(box);
+  const btn = document.createElement('button');
+  btn.className = 'learn-continue';
+  btn.textContent = 'Nächste Aufgabe';
+  btn.addEventListener('click', uebenNext);
+  body.appendChild(btn);
+  box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
 // Karte als Import-Text (so wie Claude ihn schreibt) – zum Kopieren und Erklärung holen
 function cardToImportText(c){
   const lines = [];
@@ -3220,6 +3303,7 @@ document.getElementById('expCopyBtn').addEventListener('click', async ()=>{
 });
 
 async function finishAnswer(card, correct){
+  if(card.practice){ uebenFinish(card, correct); return; }
   const original = cards.find(c=>c.id===card.id);
   original.streak = correct ? Math.min(3, original.streak + 1) : 0;
   await saveCards();
@@ -3244,6 +3328,7 @@ async function finishAnswer(card, correct){
 }
 
 function closeLearning(){
+  uebenAktiv = false;
   if(window.hideAnsKp) hideAnsKp();
   if(window.closeScratch) closeScratch();
   document.getElementById('learn').classList.remove('open');
@@ -4540,6 +4625,7 @@ if('serviceWorker' in navigator){
     ['moveOverlay',    () => closeMoveSheet()],
     ['catMenuOverlay', () => closeCategoryMenu()],
     ['selectBar',      () => exitSelect()],
+    ['uebenPicker',    () => closeUebenPicker()],
     ['importOverlay',  () => closeImport()],
     ['categoryOverlay',() => closeCategoryOverlay()],
     ['sheetOverlay',   () => closeSheet()],
